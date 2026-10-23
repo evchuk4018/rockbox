@@ -506,8 +506,13 @@ static int item_callback(int action,
 MENUITEM_RETURNVALUE(shortcut_menu, ID2P(LANG_SHORTCUTS), GO_TO_SHORTCUTMENU,
                         NULL, Icon_Bookmark);
 
+#ifdef SIMULATOR
+MENUITEM_RETURNVALUE(file_browser, "Files (Dev)", GO_TO_FILEBROWSER,
+                        NULL, Icon_file_view_menu);
+#else
 MENUITEM_RETURNVALUE(file_browser, ID2P(LANG_DIR_BROWSER), GO_TO_FILEBROWSER,
                         NULL, Icon_file_view_menu);
+#endif
 #ifdef HAVE_TAGCACHE
 MENUITEM_RETURNVALUE(db_browser, ID2P(LANG_TAGCACHE), GO_TO_DBBROWSER,
                         NULL, Icon_Audio);
