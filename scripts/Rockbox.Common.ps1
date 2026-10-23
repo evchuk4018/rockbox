@@ -9,7 +9,7 @@ function Get-RockboxDevPaths {
     $build = Join-Path $fullRoot 'build-sansaclip-sim'
     [pscustomobject]@{
         Root = $fullRoot
-        Source = Join-Path $fullRoot 'rockbox'
+        Source = $fullRoot
         Build = $build
         SimDisk = Join-Path $build 'simdisk'
         Executable = Join-Path $build 'rockboxui.exe'

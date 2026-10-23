@@ -334,3 +334,7 @@ __pycache__
 
 # /utils/time-sync/
 /utils/time-sync/time-sync
+
+# Local simulator workspace
+!/build.ps1
+/logs/

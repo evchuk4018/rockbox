@@ -8,7 +8,7 @@ jobs="${1:-4}"
 reconfigure="${2:-0}"
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid parallel job count.' >&2; exit 2; }
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-source_dir="$root/rockbox"
+source_dir="$root"
 build_dir="$root/build-sansaclip-sim"
 
 for tool in gcc ld make perl sdl2-config zip git diff; do
@@ -20,7 +20,7 @@ done
 [[ "$(command -v gcc)" == /ucrt64/bin/* ]] || { echo 'GCC must come from /ucrt64/bin.' >&2; exit 2; }
 [[ -f "$source_dir/tools/configure" ]] || { echo 'Missing Rockbox source/tools/configure.' >&2; exit 2; }
 # Rockbox makefiles contain unquoted prerequisite paths; use the requested space-free root.
-[[ "$root" != *[[:space:]]* ]] || { echo 'Rockbox upstream makefiles require a development path without whitespace (use C:\RockboxDev).' >&2; exit 2; }
+[[ "$root" != *[[:space:]]* ]] || { echo 'Rockbox upstream makefiles require a development path without whitespace (use C:\RockboxDev\rockbox).' >&2; exit 2; }
 
 mkdir -p -- "$build_dir"
 cd -- "$build_dir"

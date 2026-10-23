@@ -17,3 +17,10 @@
 
 # The simulator theme packager reads this with Unix line semantics.
 /wps/WPSLIST text eol=lf
+
+# Native Windows development entrypoints
+/scripts/** text eol=lf
+/.vscode/* text eol=lf
+/*.ps1 text eol=lf
+/README.md text eol=lf
+/DEVELOPMENT.md text eol=lf

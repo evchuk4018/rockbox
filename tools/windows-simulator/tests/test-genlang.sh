@@ -5,7 +5,7 @@ set -euo pipefail
 # Keep all generated test outputs inside the dedicated simulator build tree.
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source_root="$(cd -- "$script_dir/../../.." && pwd -P)"
-development_root="$(cd -- "$source_root/.." && pwd -P)"
+development_root="$source_root"
 output_dir="$development_root/build-sansaclip-sim/checks/genlang/lang"
 english="$source_root/apps/lang/english.lang"
 
