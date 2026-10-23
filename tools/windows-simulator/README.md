@@ -4,6 +4,8 @@ This workspace builds Rockbox's original **SanDisk Sansa Clip v1** target as a n
 
 The simulator target is `sansaclip` (`SANSA_CLIP`, 2 MB target memory configuration). It is the original Clip, rather than Clip v2, Clip+, or Clip Zip. The physical device's revision is still unknown; confirm the model when it arrives. The simulator exercises the selected target's interface and software; it does not establish compatibility with an unidentified physical device.
 
+VS Code is optional. The PowerShell build and launch scripts work independently of the editor, so you can use another C editor if you prefer.
+
 ## Daily workflow
 
 Open **C:\RockboxDev** as the VS Code folder:
@@ -114,6 +116,7 @@ The following environment was inspected/prepared on **October 23, 2026**. These 
 | GNU binutils | 2.47-4 |
 | GNU Make | 4.4.1, MSYS `/usr/bin/make` |
 | Perl | 5.42.3, MSYS Perl |
+| GNU diffutils | 3.12-1, required by Rockbox version generation |
 | SDL2 development package | `mingw-w64-ucrt-x86_64-SDL2`, 2.32.10-1 |
 | Source baseline | `9377ad18c79d274a5abec6ee0cc536f59eb7c019`, October 22, 2026 |
 
@@ -154,7 +157,7 @@ These steps document bootstrap and recovery. The machine already has the setup t
    If pacman tells you to close the terminal for an MSYS runtime/core update, close all MSYS2 shells, open UCRT64 again, and repeat `pacman -Syu` until the update is complete. Install the development packages:
 
    ```bash
-   pacman -S --needed make perl zip unzip mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2
+   pacman -S --needed make perl diffutils zip unzip mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2
    gcc --version
    gcc -dumpmachine
    ld --version
@@ -244,9 +247,31 @@ Windows checkout line endings also affected `wps/WPSLIST`: the packager treated 
 
 ## Verification record
 
-GUI launch, navigation, storage browsing, and the reversible C-source proof are **pending the setup agent's runtime verification**. Successful compilation alone does not establish that these work. Replace this paragraph with the observed results and any remaining limitations after testing.
+Verified on October 23, 2026:
+
+- The full original-Clip native Windows simulator build linked successfully, including codecs and plugins.
+- The final `build.ps1` pass through Windows PowerShell exited 0 and installed required resources without copy/conversion diagnostics. See `C:\RockboxDev\build-final.log` and `C:\RockboxDev\build-sansaclip-sim\install.log`.
+- The dependency converter passed all 12 regression checks; actual generated language C/header checks passed with native GCC.
+- The simulator-only C label change is isolated in commit `b14eacc693`. The rebuild compiled `apps/root_menu.c`, linked the executable, and binary inspection confirmed `Files (Dev)` is present.
+- `run.ps1` launched the native executable. A subsequent Windows process check found a responding `Sansa Clip` window, with a nonzero window handle and the process still running (startup PID 14592).
+- The simulated storage contains the quiet test WAV under `Music`; required WAV codec, English language, and theme resources are installed. Theme sentinel values are correctly emitted as `font: -` and `iconset: -`.
+- The scripts and VS Code JSON passed parser checks. Cleanup safety was verified in a scratch fixture, preserving source, test audio, and settings.
+
+At your request, **manual button, browser, visual-label, and audio tests are left for you**. I did not claim that those behavioral checks passed. With the simulator focused, check that the menu contains Files (Dev), that Up/Down changes selection, and that Space opens Files > Music > Rockbox Test Tone.wav. Close the window before rebuilding, or use `build.ps1 -StopSimulator`.
+
+No installation prompt or build/launch blocker remains. Earlier full compilation logs contain upstream GCC warnings, including format-check warnings and plugin-helper carriage-return warnings; the final incremental build/install log has no error diagnostics. Hardware behavior remains untested, and the arriving physical device's exact revision is still unknown.
 
 For a guided source map and a reversible interface-change exercise, see `C:\RockboxDev\DEVELOPMENT.md`.
+
+To remove only the demonstration, close the simulator and run:
+
+```powershell
+git -C C:\RockboxDev\rockbox revert b14eacc693
+C:\RockboxDev\build.ps1
+C:\RockboxDev\run.ps1
+```
+
+This keeps the Windows toolchain fixes and workflow. Inspect later edits before reverting if you have started modifying the same menu code.
 
 ## Scope
 

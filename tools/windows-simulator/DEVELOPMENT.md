@@ -118,6 +118,8 @@ Why this changes the screen: `MENUITEM_RETURNVALUE` stores the description in th
 
 To revert just this demonstration, replace that conditional block with the original two-line definition shown above, save, run `C:\RockboxDev\build.ps1`, and relaunch with `C:\RockboxDev\run.ps1`. Inspect `git diff -- apps/root_menu.c` first so any later edits in the same file are preserved. Avoid restoring the entire source tree to revert one demonstration.
 
+The demonstration is also isolated in Git commit `b14eacc693`. With the simulator closed, `git -C C:\RockboxDev\rockbox revert b14eacc693` reverts only that commit; then build and relaunch. This preserves the toolchain fixes. Manual display, navigation, and audio testing is left to you as requested.
+
 For production strings, use the language system. A literal is appropriate for this temporary, simulator-only proof; the original translated label remains in the non-simulator branch.
 
 ## What the simulator verifies
