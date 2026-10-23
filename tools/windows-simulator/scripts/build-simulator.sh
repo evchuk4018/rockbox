@@ -11,7 +11,7 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source_dir="$root/rockbox"
 build_dir="$root/build-sansaclip-sim"
 
-for tool in gcc ld make perl sdl2-config zip git; do
+for tool in gcc ld make perl sdl2-config zip git diff; do
     command -v "$tool" >/dev/null || { echo "Missing dependency: $tool. See README.md." >&2; exit 2; }
 done
 [[ "$(gcc -dumpmachine)" == 'x86_64-w64-mingw32' ]] || {
