@@ -1,0 +1,40 @@
+action.o: C:/RockboxDev/rockbox/apps/action.c \
+ C:/RockboxDev/rockbox/firmware/export/config.h \
+ C:/RockboxDev/build-sansaclip-sim/autoconf.h \
+ C:/RockboxDev/rockbox/firmware/export/config/sansaclip.h \
+ C:/RockboxDev/rockbox/firmware/export/config/sim.h \
+ C:/RockboxDev/rockbox/firmware/export/config_caps.h \
+ C:/RockboxDev/rockbox/firmware/export/pcm_sampr.h lang.h \
+ C:/RockboxDev/rockbox/apps/language.h skin_engine/skin_engine.h \
+ C:/RockboxDev/rockbox/apps/appevents.h \
+ C:/RockboxDev/rockbox/firmware/export/events.h \
+ C:/RockboxDev/rockbox/firmware/export/button.h \
+ C:/RockboxDev/rockbox/firmware/export/config.h button-target.h \
+ C:/RockboxDev/rockbox/apps/action.h viewport.h \
+ C:/RockboxDev/rockbox/apps/gesture.h kernel.h core_alloc.h splash.h \
+ C:/RockboxDev/rockbox/apps/settings.h \
+ C:/RockboxDev/rockbox/firmware/export/audiohw.h \
+ C:/RockboxDev/rockbox/firmware/export/as3514.h \
+ C:/RockboxDev/rockbox/firmware/export/audiohw_settings.h statusbar.h \
+ quickscreen.h C:/RockboxDev/rockbox/firmware/export/audio.h \
+ C:/RockboxDev/rockbox/firmware/export/pcm.h \
+ C:/RockboxDev/rockbox/firmware/export/enc_base.h dsp_proc_settings.h \
+ C:/RockboxDev/rockbox/apps/gui/list.h \
+ C:/RockboxDev/rockbox/apps/action.h \
+ C:/RockboxDev/rockbox/apps/gui/icon.h \
+ C:/RockboxDev/rockbox/apps/screen_access.h \
+ C:/RockboxDev/rockbox/firmware/export/lcd.h \
+ C:/RockboxDev/rockbox/firmware/export/cpu.h \
+ C:/RockboxDev/rockbox/firmware/export/events.h \
+ C:/RockboxDev/rockbox/firmware/export/scroll_engine.h file.h backdrop.h \
+ line.h C:/RockboxDev/rockbox/apps/gui/skin_engine/skin_engine.h \
+ tag_table.h C:/RockboxDev/rockbox/apps/gui/line.h \
+ C:/RockboxDev/rockbox/apps/screens.h timefuncs.h metadata.h \
+ C:/RockboxDev/rockbox/apps/playlist.h \
+ C:/RockboxDev/rockbox/firmware/export/rbpaths.h chunk_alloc.h \
+ C:/RockboxDev/rockbox/apps/misc.h \
+ C:/RockboxDev/rockbox/apps/screen_access.h \
+ C:/RockboxDev/rockbox/firmware/export/backlight.h \
+ C:/RockboxDev/rockbox/firmware/export/power.h \
+ C:/RockboxDev/rockbox/firmware/export/logf.h gcc_extensions.h \
+ C:/RockboxDev/rockbox/firmware/export/debug.h

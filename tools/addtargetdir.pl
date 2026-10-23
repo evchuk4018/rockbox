@@ -18,9 +18,17 @@ undef $/;
 my $target;
 my $rootlen = length $rbroot;
 my $src;
+my $dependencies = <STDIN>;
+
+# Native MinGW GCC emits drive paths, but MSYS2 Make uses /c/ paths.
+# MSYS2 Perl can identify as either msys or cygwin. Normalize before the
+# target parser sees drive colons, including GCC's escaped-colon form.
+if (($^O eq 'msys' || $^O eq 'cygwin') && $ENV{MSYSTEM}) {
+    $dependencies =~ s{(?<!\S)([A-Za-z])(?:\\)?:/}{'/' . lc($1) . '/'}ge;
+}
 
 # Split the input file on any runs of '\' and whitespace.
-for (split(/[\s\\]+/m, <STDIN>)) {
+for (split(/[\s\\]+/m, $dependencies)) {
     /^(\/)?[^:]+(\:)?$/;
 # Save target and continue if this item ends in ':'
     if (!($2 && ($target=$&))) {
