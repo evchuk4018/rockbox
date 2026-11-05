@@ -70,12 +70,19 @@ you press **Up while already on the first row**. Holding Up does not repeatedly
 refresh. Refreshing leaves playing audio alone.
 
 A suggestion starts **genre autoplay**: the selected song plays first, followed
-by songs with the same genre from the whole indexed music library. Each song
-plays once per pass, then a fresh weighted order continues automatically. The
-last song is not immediately repeated when another song is available. A genre
-with just one song repeats that song. Your saved repeat and shuffle preferences
-are preserved. Selecting a pinned playlist opens its tracks and uses normal
-playlist playback. Under
+by songs with the same genre from the whole indexed music library, in batches
+of **up to 20 songs** including your selection. Finishing a batch automatically
+loads the next one. A song counts as used once it starts, even if you skip it;
+it cannot be automatically selected again until the genre's playable pool is
+exhausted. Songs queued but never reached remain eligible. The last batch can
+be shorter than 20, then a fresh cycle begins without immediately repeating the
+last song when another is available. A one-song genre repeats that song.
+
+Stopping and resuming, including after a restart, preserves queue order and
+used-song history. Selecting another Home suggestion starts a fresh session,
+even for the same genre. You can still deliberately replay tracks by going
+backward. Your saved repeat and shuffle preferences are preserved. Selecting a
+pinned playlist opens its tracks and uses normal playlist playback. Under
 **Settings → Playlists**, hold **Space** on a playlist and choose **Pin to Home**
 or **Unpin from Home**. Up to 16 pins are saved, in the order added, in
 `simdisk/.rockbox/home-pins.txt`. The same context menu is available on a pinned
@@ -113,15 +120,21 @@ Points gradually halve every **30 days**, including time the player is off.
 Both Home suggestions and autoplay use `(1 + score)²` as their random-selection
 weight: favorites are much more likely to appear early, while new and
 lower-scored tracks still get chances. Home keeps three distinct genres.
-Scores do not change an already generated pass; they influence the next pass
-or session and the next Home refresh.
+Scores do not change an already generated batch; they influence the next batch
+or session and the next Home refresh. Batch selection is weighted random, so
+favorites tend to appear early without a fixed quota of lower-scored songs.
 
 Listening scores and completion/exit counts are saved independently of the
 database in `simdisk/.rockbox/home-scores.tsv`. Database updates and simulator
 rebuilds preserve them. External recommendation tools can read this documented
 UTF-8 format; see **Listening data for external tools** in `DEVELOPMENT.md`.
 Generated `home-autoplay-a.m3u8` and `home-autoplay-b.m3u8` files in the same
-directory preserve queue order for resume. No network connection is needed.
+directory preserve queue order for resume. Their `home-autoplay-pool-a` and
+`home-autoplay-pool-b` companion files hold the session's paths and played
+markers; keep them with the queues. Missing tracks are ignored, while additions
+and tag changes enter autoplay when you start a new session. An older saved
+full queue can finish normally and switches to batching at its next boundary.
+No network connection is needed.
 
 ## Homelab music
 

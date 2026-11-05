@@ -23,7 +23,7 @@ bool home_scores_save_failed(void);
 uint32_t home_score_time(void);
 
 void home_autoplay_init(void);
-/* Validate the database, stop previous audio, then prepare the new playlist. */
+/* Validate the database, stop previous audio, then prepare the first batch. */
 const char *home_autoplay_prepare(const char *path);
 /* Called at the existing end-of-playlist transition, with the playlist locked. */
 int home_autoplay_next_round(void);

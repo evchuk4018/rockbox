@@ -59,8 +59,9 @@ adapters. They cover genre/track uniqueness, whole-library genre matching,
 Unicode paths, refresh/navigation, pins, repeat modes, continuous autoplay,
 scoring thresholds and session ownership, duplicate finish events, decay,
 restart persistence, partial/failed writes, compaction failures, weighted
-selection, and an 850-track memory check. The adapters supply the database,
-metadata and audio events; the checks do not drive GUI or audio playback.
+selection, 20/20/5 batching without repeats, skipped versus unreached tracks,
+legacy queue adoption, and 850/5,000-track memory checks. The adapters supply the
+database, metadata and audio events; the checks do not drive GUI or audio playback.
 
 The existing regression checks run in the MSYS2 UCRT64 environment:
 
@@ -80,9 +81,11 @@ After building and seeding, the user should check the following with `run.ps1`:
    Database → Initialize Now; restart if prompted. Select a Home suggestion and
    confirm it plays first, then another song of the same genre, including songs
    outside Liked Songs. Try saved repeat off, all, one, shuffle, and A–B: genre
-   autoplay should continue in each case and preserve the preference. Check a
-   small genre through a pass boundary and confirm no immediate repeat when
-   another song is available. A one-song genre should keep playing.
+   autoplay should continue in each case and preserve the preference. Check that
+   the queue contains at most 20 tracks, including the chosen song. Skip through
+   batches and confirm no automatic repeats until the pool is exhausted; the
+   final batch can be shorter. Check no immediate repeat at the cycle boundary
+   when another song is available. A one-song genre should keep playing.
 4. Open a pinned mix, choose a track, and confirm normal playlist playback.
    Back from its track list should return Home. Insert should always return Home.
 5. Open **Settings → Playlists**, hold **Space** on Test Mix 3, and pin it.
@@ -97,19 +100,40 @@ After building and seeding, the user should check the following with `run.ps1`:
    respectively. Pausing should not create a row. Repeat through a pinned mix
    and confirm its playback does not update these scores.
 9. Stop, restart the simulator, and resume the playlist. Check the saved queue
-   order and continued scoring. Update the database after changing the library
-   and confirm the scores persist. New sessions use the updated library; an
-   existing session keeps its genre pool until you start a new one.
+   order, used-song history across batches, and continued scoring. Selecting a
+   new suggestion, even of the same genre, should reset history. Update the
+   database after changing the library and confirm the scores persist. New
+   sessions use the updated library; an existing session keeps its genre pool
+   until you start a new one.
 
 The Home sources and integration are compiled only for `SANSA_CLIP`; they share
 the simulator and device code path. `home_play_suggestion(path)` validates the
 database/seed, stops old playback, prepares a weighted genre playlist, and starts
 it with `PLAYLIST_FLAG_HOME_AUTOPLAY`. This persisted flag overrides effective
 repeat behavior without changing saved settings. At the existing repeat-shuffle
-boundary, autoplay writes a fresh order to the inactive one of two M3U8 files,
-then loads it through the normal playlist API. It reuses the session's paths
-without rescanning tags or the library. Missing paths are removed on the next
-pass; no remaining paths means stop. The normal playlist-size limit applies.
+boundary, autoplay writes up to 20 unused paths to the inactive one of two M3U8
+files, then loads it through the normal playlist API. The selected suggestion
+occupies the first slot of a new session. The configured playlist-size limit
+caps each batch, rather than the genre pool. A bounded max-heap retains only the
+best weighted ranks, then sorts that batch. Every refill scans the saved pool;
+used paths need no score lookup, and tags are searched only for a new session.
+
+Two pool slots (`home-autoplay-pool-a` and `home-autoplay-pool-b`) hold UTF-8
+paths and one-byte played markers. The first line is `0` or `1`, the marker for
+the current cycle. Each remaining LF-terminated row is a marker immediately
+followed by an absolute path. A row matching the header has already started.
+After exhaustion, flipping and syncing the header resets the cycle without
+rewriting all rows. Missing paths are ignored; no playable paths means stop.
+An existing full queue without pool metadata is adopted at its next boundary.
+
+M3U comments `#HOME-POOL:a` or `#HOME-POOL:b` bind a queue to its pool, and
+`#HOME-OFFSET:<byte offset>` before each path permits a direct marker update.
+Track-change events search only the small batch, validate the referenced path,
+and sync its marker. Queuing alone does not consume a song. Resume uses these
+same files; selecting a new suggestion builds the unused pool slot before
+publishing the new queue. Failed preparation leaves the previous queue and its
+pool intact. A failed progress write prevents automatic refill for that session;
+missing or malformed pool data also stops refill instead of clearing history.
 
 Track-change events capture session ownership, so replacing the playlist still
 credits the old Home track correctly. Finish events append one small score row;
@@ -121,9 +145,11 @@ Home shows a save-failure message on the next visit if storage rejected a score.
 
 The score index stores hashes, numbers, and file offsets, with full paths kept
 on disk and compared to resolve hash collisions. Its capacity doubles as needed.
-An 850-track host check retained 28 KiB and peaked at 42 KiB, including temporary
-queue construction or index growth. Queue sort records are 16 bytes per matching
-track on the Windows host. There is no recommendation thread or periodic scan.
+An 850-track host check retains 28 KiB for the score index and adds only 320 bytes
+while constructing a batch (20 records of 16 bytes on the Windows host), versus
+13,600 bytes for the former full-genre sort. Index growth can still temporarily
+retain old and new allocations. A 5,000-track pool uses the same 20-record queue
+allocation. There is no recommendation thread or periodic scan.
 Decay and weighted selection use fixed-point arithmetic, calculated only when
 reading/updating scores or generating picks. A bad/backward clock does not
 increase a score through decay.

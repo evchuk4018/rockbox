@@ -23,7 +23,7 @@
 #undef rename
 #undef ftruncate
 
-static int fail_write, fail_sync, fail_rename;
+static int fail_write, fail_sync, fail_rename, rename_failure_countdown;
 static bool short_write;
 int test_open(const char *path, int flags, ...)
 {
@@ -41,6 +41,7 @@ int test_sync(int fd)
 }
 int test_rename(const char *old, const char *new)
 {
+    if (rename_failure_countdown > 0 && --rename_failure_countdown == 0) return -1;
     return !fail_rename && MoveFileExA(old, new, MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
 }
 int test_truncate(int fd, off_t length) { return _chsize(fd, length); }
@@ -83,9 +84,10 @@ bool playlist_allow_dirplay(const struct playlist_info *p);
 /* Only platform services are adapted; queue generation and score I/O below
  * are the production sources, compiled as separate translation units. */
 static void *allocations[64];
-static size_t allocation_sizes[64], live_bytes, peak_bytes;
+static size_t allocation_sizes[64], live_bytes, peak_bytes, largest_request;
 int core_alloc(size_t length)
 {
+    if (length > largest_request) largest_request = length;
     for (int i = 1; i < 64; i++)
         if (!allocations[i])
         {
@@ -124,12 +126,19 @@ static struct { const char *path, *genre; bool exists; } library[] = {
     {"/Elsewhere/not-liked.mp3", "POP", true},
     {"/Music/rock.mp3", "Rock", true},
     {"/Music/missing.mp3", "Pop", false},
-    {"/Music/third.mp3", "Pop", true},
+    {"/Music/歌曲 troisième.mp3", "Pop", true},
 };
 static bool database_usable = true;
+static int large_library_count, missing_large_track = -1, database_searches;
+static bool large_library_missing;
 bool file_exists(const char *path)
 {
-    if (!strncmp(path, "/Large/", 7)) return true;
+    if (!strncmp(path, "/Large/", 7))
+    {
+        int index = -1;
+        return !large_library_missing && sscanf(path, "/Large/Song %d.mp3", &index) == 1 &&
+               index >= 0 && index < large_library_count && index != missing_large_track;
+    }
     for (unsigned i = 0; i < sizeof(library) / sizeof(*library); i++)
         if (!strcmp(path, library[i].path)) return library[i].exists;
     return _access(path, 0) == 0;
@@ -137,6 +146,14 @@ bool file_exists(const char *path)
 bool get_metadata(struct mp3entry *id3, int fd, const char *path)
 {
     (void)fd;
+    if (!strncmp(path, "/Large/", 7) && file_exists(path))
+    {
+        memset(id3, 0, sizeof(*id3));
+        strlcpy(id3->path, path, sizeof(id3->path));
+        id3->genre_string = "Large";
+        id3->length = 200000;
+        return true;
+    }
     for (unsigned i = 0; i < sizeof(library) / sizeof(*library); i++)
         if (!strcmp(path, library[i].path) && library[i].exists)
         {
@@ -150,11 +167,17 @@ bool get_metadata(struct mp3entry *id3, int fd, const char *path)
 }
 bool tagcache_is_usable(void) { return database_usable; }
 bool tagcache_search(struct tagcache_search *s, int tag)
-{ (void)tag; *s = (struct tagcache_search){0}; return database_usable; }
+{ (void)tag; database_searches++; *s = (struct tagcache_search){0}; return database_usable; }
 bool tagcache_search_add_clause(struct tagcache_search *s, struct tagcache_search_clause *c)
 { assert(c->tag == tag_genre && c->type == clause_is); s->genre = c->str; return true; }
 bool tagcache_get_next(struct tagcache_search *s, char *path, long size)
 {
+    if (!strcmp(s->genre, "Large"))
+    {
+        if (s->index >= large_library_count) return false;
+        snprintf(path, size, "/Large/Song %d.mp3", s->index++);
+        return true;
+    }
     while (s->index < (int)(sizeof(library) / sizeof(*library)))
     {
         int i = s->index++;
@@ -200,6 +223,39 @@ int playlist_create(const char *dir, const char *name)
 }
 
 /* PRODUCTION_FUNCTIONS */
+
+static void start_track(int index)
+{
+    struct mp3entry id3;
+    current_playlist.index = index;
+    assert(get_metadata(&id3, -1, queue_paths[index]));
+    emit(PLAYBACK_EVENT_TRACK_CHANGE, &id3, TEF_CURRENT);
+}
+
+static void play_batch(void)
+{
+    for (int i = 0; i < current_playlist.amount; i++) start_track(i);
+}
+
+static void prepare_large(int count)
+{
+    large_library_count = count;
+    large_library_missing = false;
+    missing_large_track = -1;
+    const char *queue = home_autoplay_prepare("/Large/Song 0.mp3");
+    assert(queue);
+    assert(!playlist_create(".", strrchr(queue, '/') + 1));
+    assert(!playlist_set_home_autoplay());
+    assert(!strcmp(queue_paths[0], "/Large/Song 0.mp3"));
+}
+
+static int large_index(const char *path)
+{
+    int index = -1;
+    assert(sscanf(path, "/Large/Song %d.mp3", &index) == 1);
+    assert(index >= 0 && index < large_library_count);
+    return index;
+}
 
 static void test_sampling_and_refresh(void)
 {
@@ -448,7 +504,7 @@ static void test_autoplay(void)
         assert(playlist_get_repeat_mode() == REPEAT_SHUFFLE);
         assert(!playlist_allow_dirplay(NULL));
         assert(!ab_repeat_mode_enabled());
-        current_playlist.index = current_playlist.amount - 1;
+        play_batch();
         char last[MAX_PATH]; strcpy(last, queue_paths[current_playlist.index]);
         assert(playlist_check(1));
         assert(playlist_next(1) == 0);
@@ -500,7 +556,203 @@ static void test_autoplay(void)
     library[0].exists = false;
     assert(playlist_next(1) == -1);
     library[0].exists = library[1].exists = library[4].exists = true;
+    queue = home_autoplay_prepare(library[4].path); assert(queue);
+    assert(!playlist_create(".", strrchr(queue, '/') + 1));
+    assert(!playlist_set_home_autoplay());
+    assert(!strcmp(queue_paths[0], library[4].path));
+    play_batch();
+    assert(playlist_next(1) == 0);
     printf("Score table and queue peak host allocation: %zu bytes.\n", peak_bytes);
+}
+
+static void test_batches_and_resume(void)
+{
+    global_settings.max_files_in_playlist = 1024;
+    prepare_large(45);
+    bool seen[45] = {false};
+    int searches = database_searches;
+    for (int batch = 0; batch < 9; batch++)
+    {
+        if (batch % 3 == 0) memset(seen, 0, sizeof(seen));
+        assert(current_playlist.amount == (batch % 3 == 2 ? 5 : 20));
+        for (int i = 0; i < current_playlist.amount; i++)
+        {
+            int index = large_index(queue_paths[i]);
+            assert(!seen[index]); seen[index] = true;
+            start_track(i); /* An immediate skip still counts as used. */
+            if (batch == 0 && i == 7)
+            {
+                char saved[20][MAX_PATH], queue[MAX_PATH];
+                memcpy(saved, queue_paths, sizeof(saved));
+                strcpy(queue, current_playlist.filename);
+                home_autoplay_init(); /* Discard volatile session state. */
+                assert(!playlist_create(".", strrchr(queue, '/') + 1));
+                assert(!playlist_set_home_autoplay());
+                assert(current_playlist.amount == 20);
+                assert(!memcmp(saved, queue_paths, sizeof(saved)));
+                start_track(i); /* Resume the same song; marking is idempotent. */
+            }
+        }
+        char last[MAX_PATH]; strcpy(last, queue_paths[current_playlist.index]);
+        assert(playlist_next(1) == 0);
+        assert(strcmp(last, queue_paths[0]));
+        if (batch % 3 == 2)
+            for (int i = 0; i < 45; i++) assert(seen[i]);
+    }
+    assert(database_searches == searches); /* No database query between batches. */
+    assert(current_playlist.amount == 20);
+
+    /* Only the seed started. The other 44, including queued/unreached songs,
+     * must all appear before the seed can return. */
+    prepare_large(45);
+    start_track(0);
+    memset(seen, 0, sizeof(seen)); seen[0] = true;
+    current_playlist.index = current_playlist.amount - 1;
+    for (int batch = 0; batch < 3; batch++)
+    {
+        assert(playlist_next(1) == 0);
+        assert(current_playlist.amount == (batch == 2 ? 4 : 20));
+        for (int i = 0; i < current_playlist.amount; i++)
+        {
+            int index = large_index(queue_paths[i]);
+            assert(!seen[index]); seen[index] = true;
+            start_track(i);
+        }
+    }
+    for (int i = 0; i < 45; i++) assert(seen[i]);
+
+    /* Starting another suggestion resets history even for the same genre. */
+    prepare_large(45);
+    play_batch();
+    prepare_large(45);
+    assert(!strcmp(queue_paths[0], "/Large/Song 0.mp3"));
+
+    global_settings.max_files_in_playlist = 7;
+    prepare_large(45);
+    assert(current_playlist.amount == 7);
+    global_settings.max_files_in_playlist = 1;
+    prepare_large(2);
+    assert(current_playlist.amount == 1);
+    start_track(0);
+    assert(playlist_next(1) == 0);
+    assert(!strcmp(queue_paths[0], "/Large/Song 1.mp3"));
+    start_track(0);
+    assert(playlist_next(1) == 0);
+    assert(!strcmp(queue_paths[0], "/Large/Song 0.mp3"));
+    global_settings.max_files_in_playlist = 1024;
+}
+
+static void test_batch_weights(void)
+{
+    remove(HOME_SCORES_FILE); home_scores_reload();
+    assert(home_score_record("/Large/Song 1.mp3", 1000, 1000, true, home_score_time()));
+    int favorite = 0, lower = 0, favorite_early = 0, lower_early = 0;
+    for (unsigned int seed = 0; seed < 100; seed++)
+    {
+        srand(seed);
+        prepare_large(45);
+        for (int i = 1; i < current_playlist.amount; i++)
+        {
+            int index = large_index(queue_paths[i]);
+            favorite += index == 1;
+            lower += index == 2;
+            favorite_early += index == 1 && i < 5;
+            lower_early += index == 2 && i < 5;
+        }
+    }
+    assert(favorite > lower && lower > 0);
+    assert(favorite_early > lower_early && lower_early > 0);
+    remove(HOME_SCORES_FILE); home_scores_reload();
+}
+
+static void active_pool(char *name)
+{
+    char header[MAX_PATH];
+    int fd = test_open(current_playlist.filename, O_RDONLY);
+    assert(fd >= 0 && read_line(fd, header, sizeof(header)) > 0);
+    close(fd);
+    char slot;
+    assert(sscanf(header, "#HOME-POOL:%c", &slot) == 1);
+    snprintf(name, MAX_PATH, "./home-autoplay-pool-%c", slot);
+}
+
+static void test_batch_failures_and_missing(void)
+{
+    prepare_large(45);
+    char pool[MAX_PATH], original[4096], after[4096], queue[MAX_PATH];
+    active_pool(pool);
+    strcpy(queue, current_playlist.filename);
+    int fd = test_open(pool, O_RDONLY);
+    assert(fd >= 0);
+    int size = read(fd, original, sizeof(original)); close(fd);
+    assert(size > 0 && size < (int)sizeof(original));
+    for (int failure = 0; failure < 5; failure++)
+    {
+        fail_write = failure == 0; fail_sync = failure == 1;
+        fail_rename = failure == 2; short_write = failure == 3;
+        rename_failure_countdown = failure == 4 ? 2 : 0; /* Pool published, queue fails. */
+        assert(!home_autoplay_prepare("/Large/Song 0.mp3"));
+        fail_write = fail_sync = fail_rename = 0; short_write = false;
+        rename_failure_countdown = 0;
+        assert(!strcmp(queue, current_playlist.filename));
+        fd = test_open(pool, O_RDONLY);
+        assert(fd >= 0 && read(fd, after, sizeof(after)) == size); close(fd);
+        assert(!memcmp(original, after, size));
+    }
+    play_batch();
+    for (int failure = 0; failure < 4; failure++)
+    {
+        fail_write = failure == 0; fail_sync = failure == 1;
+        fail_rename = failure == 2; short_write = failure == 3;
+        assert(playlist_next(1) == -1);
+        fail_write = fail_sync = fail_rename = 0; short_write = false;
+        assert(!strcmp(queue, current_playlist.filename));
+        assert(current_playlist.amount == 20);
+    }
+    assert(playlist_next(1) == 0);
+
+    /* A failed progress write latches until a new session is prepared. */
+    fail_write = 1; start_track(0); fail_write = 0;
+    current_playlist.index = current_playlist.amount - 1;
+    assert(playlist_next(1) == -1);
+    prepare_large(45);
+    fail_sync = 1; start_track(0); fail_sync = 0;
+    current_playlist.index = current_playlist.amount - 1;
+    assert(playlist_next(1) == -1);
+    prepare_large(1); start_track(0);
+    fail_sync = 1; assert(playlist_next(1) == -1); fail_sync = 0;
+    assert(playlist_next(1) == -1); /* Failed cycle reset also latches. */
+    prepare_large(45);
+    play_batch();
+    missing_large_track = 0; /* Already used; deleting it must not reset history. */
+    assert(playlist_next(1) == 0);
+    assert(current_playlist.amount == 20);
+    play_batch();
+    missing_large_track = -1;
+    /* Delete one of the last five remaining tracks. */
+    bool remaining[45]; memset(remaining, 1, sizeof(remaining));
+    active_pool(pool); fd = test_open(pool, O_RDONLY); assert(fd >= 0);
+    char row[MAX_PATH + 1]; assert(read_line(fd, row, sizeof(row)) > 0);
+    char marker = row[0];
+    while (read_line(fd, row, sizeof(row)) > 0)
+        remaining[large_index(row + 1)] = row[0] != marker;
+    close(fd);
+    for (int i = 0; i < 45; i++) if (remaining[i]) { missing_large_track = i; break; }
+    assert(playlist_next(1) == 0);
+    assert(current_playlist.amount == 4);
+    large_library_missing = true;
+    current_playlist.index = current_playlist.amount - 1;
+    assert(playlist_next(1) == -1);
+    large_library_missing = false; missing_large_track = -1;
+
+    /* Missing/truncated progress is an error, never a fresh cycle. */
+    prepare_large(45); play_batch(); active_pool(pool);
+    fd = test_open(pool, O_RDWR); assert(fd >= 0);
+    assert(!test_truncate(fd, 17)); close(fd);
+    assert(playlist_next(1) == -1);
+    prepare_large(45); play_batch(); active_pool(pool);
+    assert(!remove(pool));
+    assert(playlist_next(1) == -1);
 }
 
 static void test_library_sized_memory(void)
@@ -508,6 +760,7 @@ static void test_library_sized_memory(void)
     remove(HOME_SCORES_FILE); home_scores_reload();
     peak_bytes = live_bytes;
     uint32_t now = home_score_time();
+    large_library_count = 850;
     int fd = test_open(HOME_AUTOPLAY_A, O_WRONLY | O_CREAT | O_TRUNC);
     assert(fd >= 0);
     for (int i = 0; i < 850; i++)
@@ -525,18 +778,26 @@ static void test_library_sized_memory(void)
     assert(!playlist_set_home_autoplay());
     current_playlist.index = 849;
     char last[MAX_PATH]; strcpy(last, queue_paths[849]);
+    largest_request = 0;
+    size_t retained = live_bytes;
+    peak_bytes = retained;
     assert(playlist_next(1) == 0);
-    assert(current_playlist.amount == 850);
+    assert(current_playlist.amount == 20); /* Legacy full queue adopted as a pool. */
     assert(strcmp(queue_paths[0], last));
-    for (int i = 0; i < 850; i++)
+    for (int i = 0; i < 20; i++)
     {
         assert(home_score_get(queue_paths[i], now) == 2 * HOME_SCORE_ONE);
         for (int j = 0; j < i; j++) assert(strcmp(queue_paths[i], queue_paths[j]));
     }
     assert(live_bytes <= 32768);
-    assert(peak_bytes <= 65536);
+    assert(largest_request <= 320 && peak_bytes <= retained + 320);
     printf("850 scored tracks: %zu bytes retained, %zu bytes peak including queue construction.\n",
            live_bytes, peak_bytes);
+    global_settings.max_files_in_playlist = 100;
+    largest_request = 0;
+    prepare_large(5000);
+    assert(current_playlist.amount == 20);
+    assert(largest_request <= 320);
 }
 
 int main(void)
@@ -548,7 +809,10 @@ int main(void)
     test_playback();
     test_scores();
     test_autoplay();
+    test_batches_and_resume();
+    test_batch_weights();
+    test_batch_failures_and_missing();
     test_library_sized_memory();
-    puts("Home sampling, pins, genre autoplay, scores, decay, persistence, and repeat checks passed.");
+    puts("Home sampling, pins, 20-song autoplay batches, scores, persistence, and repeat checks passed.");
     return 0;
 }
