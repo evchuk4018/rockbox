@@ -119,7 +119,7 @@ playlist is created on the first like if absent; prepared relative paths and
 Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
-Now Playing shows the song title once, followed by artist and Next. Repeated
+Now Playing shows the song title once, followed by the artist. Repeated
 comma-separated artist credits are displayed once without changing the music tags.
 The progress bar is now near the bottom. The countdown underneath, such as
 **-2:34**, shows remaining song time. The same footer row contains **battery/charging**,

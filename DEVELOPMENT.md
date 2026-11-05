@@ -112,14 +112,14 @@ After building and seeding, the user should check the following with `run.ps1`:
     then re-enter the screen/restart to check persistence. Hold Up for pitch and
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
-11. Check the Clip Cabbie layout: metadata and Next text scroll, the three retained
+11. Check the Clip Cabbie layout: title and artist text scroll, the three retained
     status indicators, countdown, and heart all sit below the progress bar in blue.
     Confirm a single with identical album/title tags shows its title once and
     repeated artist credits are displayed once. The old counter and lock/volume/repeat indicators should
     be absent. Check a long song, seeking, pausing, and the end of a track.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
-    Change Genre shows its target, the asterisk appears, and Next previews a song
-    from that genre. Let the current song finish: it must not restart or briefly
+    Change Genre shows its target and the asterisk appears. Let the current song
+    finish: it must not restart or briefly
     play an old-genre successor. Repeat using manual Next. Pause/seek should keep
     the request; Stop, backward navigation, another playlist and restart should
     clear it. Try a liked playlist with one genre and check the explanatory message.
@@ -136,7 +136,7 @@ The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG
 Change Genre prepares the inactive pool/queue under the playlist lock without
 stopping audio. Pending positive peeks/checks see that queue; forward progression
 adopts it before announcing the new track. Flushing buffered successors preserves
-the playing track and updates Next metadata. Stop and playlist replacement clear
+the playing track and updates buffered successor metadata. Stop and playlist replacement clear
 the volatile request; no extra persistent pending-request file is needed. Old-track
 finish scoring remains attached to its original play. A queued genre starts a fresh
 used-song cycle, then uses the existing 20-song batching and persistence.

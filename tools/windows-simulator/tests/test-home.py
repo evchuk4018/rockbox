@@ -96,6 +96,8 @@ int main(int argc, char **argv) {
             self.assertLessEqual(left[0] + left[2], right[0])
         self.assertEqual(len(re.findall(r"%it(?![A-Za-z])", skin)), 1)
         self.assertNotIn("%id", skin)  # Singles often have identical album/title tags.
+        self.assertNotIn("%Sx(Next:)", skin)
+        self.assertNotIn("%?It", skin)
 
     def test_clip_button_events(self):
         import re
