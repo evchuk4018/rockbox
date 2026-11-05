@@ -17299,3 +17299,45 @@
     recording_remote: "remote recording screen skin"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_PIN_TO_HOME
+  desc: playlist context menu, pin this playlist to Home
+  user: core
+  <source>
+    *: "Pin to Home"
+  </source>
+  <dest>
+    *: "Pin to Home"
+  </dest>
+  <voice>
+    *: "Pin to Home"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_UNPIN_FROM_HOME
+  desc: playlist context menu, remove this playlist from Home
+  user: core
+  <source>
+    *: "Unpin from Home"
+  </source>
+  <dest>
+    *: "Unpin from Home"
+  </dest>
+  <voice>
+    *: "Unpin from Home"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_HOME_NO_LIKED
+  desc: Home has no readable liked songs with genre tags
+  user: core
+  <source>
+    *: "No liked songs with genres"
+  </source>
+  <dest>
+    *: "No liked songs with genres"
+  </dest>
+  <voice>
+    *: "No liked songs with genres"
+  </voice>
+</phrase>

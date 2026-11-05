@@ -1713,7 +1713,9 @@ static int get_next_index(const struct playlist_info* playlist, int steps,
     if (playlist->amount <= 0)
         return -1;
 
-    if (repeat_mode == -1)
+    if (playlist->flags & PLAYLIST_FLAG_SINGLE_TRACK)
+        repeat_mode = REPEAT_OFF;
+    else if (repeat_mode == -1)
         repeat_mode = global_settings.repeat_mode;
 
     if (repeat_mode == REPEAT_SHUFFLE && playlist->amount <= 1)
@@ -2143,7 +2145,7 @@ bool playlist_check(int steps)
 
     int index = get_next_index(playlist, steps, -1);
 
-    if (index < 0 && steps >= 0 && global_settings.repeat_mode == REPEAT_SHUFFLE)
+    if (index < 0 && steps >= 0 && playlist_get_repeat_mode() == REPEAT_SHUFFLE)
         index = get_next_index(playlist, steps, REPEAT_ALL);
 
     return (index >= 0);
@@ -2733,13 +2735,31 @@ void playlist_set_modified(struct playlist_info* playlist, bool modified)
     playlist_write_unlock(playlist);
 }
 
+/* Persist the one-shot policy with the playlist, without changing preferences. */
+int playlist_set_single_track(void)
+{
+    struct playlist_info *playlist = &current_playlist;
+    playlist_write_lock(playlist);
+    int result = update_playlist_flags_unlocked(playlist,
+                         PLAYLIST_FLAG_SINGLE_TRACK, PLAYLIST_FLAG_DIRPLAY);
+    playlist_write_unlock(playlist);
+    return result;
+}
+
+int playlist_get_repeat_mode(void)
+{
+    return current_playlist.flags & PLAYLIST_FLAG_SINGLE_TRACK ?
+           REPEAT_OFF : global_settings.repeat_mode;
+}
+
 /* returns true if directory playback features should be enabled */
 bool playlist_allow_dirplay(const struct playlist_info *playlist)
 {
     if (!playlist)
         playlist = &current_playlist;
 
-    if (playlist_modified(playlist))
+    if (playlist_modified(playlist) ||
+        (playlist->flags & PLAYLIST_FLAG_SINGLE_TRACK))
         return false;
 
     return !!(playlist->flags & PLAYLIST_FLAG_DIRPLAY);
@@ -2932,7 +2952,7 @@ int playlist_next(int steps)
     playlist_write_lock(playlist);
 
     int index;
-    int repeat_mode = global_settings.repeat_mode;
+    int repeat_mode = playlist_get_repeat_mode();
     if (repeat_mode == REPEAT_ONE)
     {
         if (is_manual_skip())

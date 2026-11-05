@@ -38,6 +38,9 @@
 #include "talk.h"
 #include "audio.h"
 #include "shortcuts.h"
+#ifdef SANSA_CLIP
+#include "home_screen.h"
+#endif
 
 #ifdef HAVE_HOTSWAP
 #include "storage.h"
@@ -967,7 +970,21 @@ void root_menu(void)
                  * button to be handled by HOST instead of rockbox */
                 ignore_back_button_stub(true);
 
+#ifdef SANSA_CLIP
+                if (home_in_settings)
+                {
+                    next_screen = do_menu(&root_menu_, &selected, NULL, false);
+                    if (next_screen == GO_TO_PREVIOUS)
+                    {
+                        home_in_settings = false;
+                        next_screen = GO_TO_ROOT;
+                    }
+                }
+                else
+                    next_screen = home_screen();
+#else
                 next_screen = do_menu(&root_menu_, &selected, NULL, false);
+#endif
 
                 ignore_back_button_stub(false);
 

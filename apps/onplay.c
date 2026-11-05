@@ -62,6 +62,9 @@
 #include "viewport.h"
 #include "pathfuncs.h"
 #include "shortcuts.h"
+#ifdef SANSA_CLIP
+#include "home_screen.h"
+#endif
 #include "misc.h"
 #ifdef HAVE_DISK_STORAGE
 #include "storage.h"
@@ -1284,10 +1287,33 @@ MENUITEM_FUNCTION(view_playlist_item, 0, ID2P(LANG_VIEW),
                   view_playlist,
                   onplaymenu_callback, Icon_Playlist);
 
+#ifdef SANSA_CLIP
+static int toggle_home_pin(void)
+{
+    if (home_toggle_pin(selected_file.path) < 0)
+        splash(HZ * 2, ID2P(LANG_FAILED));
+    return 0;
+}
+
+static char *home_pin_name(int selected, void *data, char *buf, size_t size)
+{
+    (void)selected; (void)data; (void)buf; (void)size;
+    return home_playlist_is_pinned(selected_file.path) ?
+           str(LANG_UNPIN_FROM_HOME) : str(LANG_PIN_TO_HOME);
+}
+
+MENUITEM_FUNCTION_DYNTEXT(home_pin_item, 0, toggle_home_pin,
+                         home_pin_name, NULL, NULL, onplaymenu_callback,
+                         Icon_Playlist);
+#endif
+
 /* used when onplay() is not called in the CONTEXT_WPS context */
 MAKE_ONPLAYMENU( tree_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            onplaymenu_callback, Icon_file_view_menu,
            &view_playlist_item, &tree_playlist_menu, &cat_playlist_menu,
+#ifdef SANSA_CLIP
+           &home_pin_item,
+#endif
            &rename_file_item, &clipboard_cut_item, &clipboard_copy_item,
            &clipboard_paste_item, &delete_file_item, &delete_dir_item,
            &list_viewers_item, &create_dir_item, &properties_item, &track_info_item,
@@ -1317,7 +1343,11 @@ static int onplaymenu_callback(int action,
             }
             break;
         case ACTION_REQUEST_MENUITEM:
-            if (this_item == &view_playlist_item)
+            if (this_item == &view_playlist_item
+#ifdef SANSA_CLIP
+                || this_item == &home_pin_item
+#endif
+               )
             {
                 if ((selected_file.attr & FILE_ATTR_MASK) == FILE_ATTR_M3U &&
                         selected_file.context == CONTEXT_TREE)

@@ -56,6 +56,7 @@ static inline void ab_dummy_voidfn(void){}
 #define AB_MARKER_NONE 0
 
 #include "settings.h"
+#include "playlist.h"
 
 bool ab_before_A_marker(unsigned int song_position);
 bool ab_after_A_marker(unsigned int song_position);
@@ -75,7 +76,7 @@ extern unsigned int ab_B_marker;
 
 static inline bool ab_repeat_mode_enabled(void)
 {
-    return global_settings.repeat_mode == REPEAT_AB;
+    return playlist_get_repeat_mode() == REPEAT_AB;
 }
 
 static inline bool ab_reached_B_marker(unsigned int song_position)

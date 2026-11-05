@@ -35,6 +35,9 @@
 #include "action.h"
 #include "kernel.h"
 #include "core_alloc.h"
+#if defined(SANSA_CLIP) && !defined(BOOTLOADER)
+#include "home_screen.h"
+#endif
 
 #include "splash.h"
 #include "settings.h"
@@ -1280,6 +1283,10 @@ int get_action(int context, int timeout)
 
     action = do_backlight(&action_last, &current, action);
 
+#if defined(SANSA_CLIP) && !defined(BOOTLOADER)
+    /* Remember explicit Home separately from a screen returning after Back. */
+    home_handle_action(action);
+#endif
     return action;
 }
 

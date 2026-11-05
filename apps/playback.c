@@ -3251,7 +3251,7 @@ static void audio_on_skip(void)
     /* Manual skip */
     track_event_flags = TEF_NONE;
 
-    if (toskip == 1 && global_settings.repeat_mode == REPEAT_ONE)
+    if (toskip == 1 && playlist_get_repeat_mode() == REPEAT_ONE)
     {
         audio_reset_and_rebuffer(TRACK_LIST_KEEP_CURRENT, 1);
     }
