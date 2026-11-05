@@ -89,13 +89,23 @@ int main(int argc, char **argv) {
             viewports.append((x, y, width, height, content))
         progress = next(v for v in viewports if "%pb(" in v[4])
         for viewport in viewports:
-            if any(token in viewport[4] for token in ("%pr", "%xd(B", "%xd(D", "%xd(F", "%xd(H", "%?hG")):
+            if any(token in viewport[4] for token in ("%xd(B", "%xd(D", "%xd(E", "%xd(F", "%xd(H", "%?hG")):
                 self.assertGreaterEqual(viewport[1], progress[1] + progress[3])
         footer = sorted((v for v in viewports if v[1] >= progress[1] + progress[3]), key=lambda v: v[0])
         for left, right in zip(footer, footer[1:]):
             self.assertLessEqual(left[0] + left[2], right[0])
-        self.assertEqual(len(re.findall(r"%it(?![A-Za-z])", skin)), 1)
-        self.assertNotIn("%id", skin)  # Singles often have identical album/title tags.
+        self.assertEqual(len(re.findall(r"%\?it<", skin)), 1)
+        self.assertIn("%?if(%id, !=, %it)", skin)
+        visualizer = next(v for v in viewports if "%xd(V)" in v[4])
+        album = next(v for v in viewports if "%?id" in v[4])
+        self.assertGreaterEqual(visualizer[1], album[1] + album[3])
+        for token in ("%pc", "%pt"):
+            timer = next(v for v in viewports if token in v[4])
+            self.assertGreaterEqual(timer[1], visualizer[1] + visualizer[3])
+            self.assertLessEqual(timer[1] + timer[3], progress[1])
+        self.assertNotIn("%hV", skin)
+        self.assertNotIn("%pm", skin)
+        self.assertNotIn("%pr", skin)
         self.assertNotIn("%Sx(Next:)", skin)
         self.assertNotIn("%?It", skin)
 

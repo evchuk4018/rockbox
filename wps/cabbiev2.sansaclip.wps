@@ -1,28 +1,40 @@
-# Clip song-first Cabbie variant. SPDX-License-Identifier: GPL-2.0-or-later
+# Clip reference layout. SPDX-License-Identifier: GPL-2.0-or-later
 %wd
-%xl(B,battery-128x64x1.bmp,0,0,9)
-%xl(D,shuffle-128x64x1.bmp,0,1)
-%xl(F,playmode-128x64x1.bmp,0,0,5)
+%Fl(2,05-Cabbie-Bold.fnt)
+%Fl(3,06-Cabbie-Bold.fnt)
+%xl(B,battery-clip.bmp,0,0,9)
+%xl(D,shuffle-clip.bmp,0,0)
+%xl(E,repeat-clip.bmp,0,0,4)
+%xl(F,playmode-clip.bmp,0,0,5)
 %xl(H,heart-clip.bmp,0,0,2)
-# One song title in yellow, then artist in blue.
-%V(0,4,128,8,1)
+%xl(V,bars-clip.bmp,0,0)
+# Title in yellow, artist and smaller album in blue.
+%V(0,2,128,8,1)
 %ac%s%?it<%it|%fn>
-%V(0,18,128,8,1)
+%V(0,16,128,8,1)
 %ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
-# Progress above the entire footer.
-%V(0,46,128,6,1)
+%V(0,26,128,5,2)
+%ac%s%?id<%?if(%id, !=, %it)<%id>>
+# Static reference bars, followed by elapsed time and total duration.
+%V(25,34,78,6,1)
+%xd(V)
+%V(3,42,60,6,3)
+%al%pc
+%V(65,42,60,6,3)
+%ar%pt
+# Full-width progress above five evenly spaced footer icons.
+%V(0,48,128,6,1)
 %x(a,pbbackground-128x64x1.bmp,1,0)
 %pb(2,1,123,4,pb-128x64x1.bmp)
-# Countdown, battery, shuffle/change genre, playback state, and heart.
-%V(0,56,48,8,1)
--%pr
-%V(50,56,16,8,1)
+%V(15,56,14,8,1)
 %?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
-%V(73,56,18,8,1)
-%?hA<%xd(D)|%?ps<%xd(D)>>
-%V(92,56,6,8,1)
+%V(39,56,12,8,1)
+%xd(D)
+%V(54,56,6,8,1)
 %?hG<*>
-%V(103,56,10,8,1)
+%V(61,55,9,9,1)
 %?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
-%V(117,56,9,8,1)
+%V(80,56,12,8,1)
+%?mm<%xd(Ea)|%xd(Ea)|%xd(Eb)|%xd(Ec)|%xd(Ed)>
+%V(104,56,9,8,1)
 %?hL<%xd(Hb)|%xd(Ha)>

@@ -112,11 +112,12 @@ After building and seeding, the user should check the following with `run.ps1`:
     then re-enter the screen/restart to check persistence. Hold Up for pitch and
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
-11. Check the Clip Cabbie layout: title and artist text scroll, the three retained
-    status indicators, countdown, and heart all sit below the progress bar in blue.
-    Confirm a single with identical album/title tags shows its title once and
-    repeated artist credits are displayed once. The old counter and lock/volume/repeat indicators should
-    be absent. Check a long song, seeking, pausing, and the end of a track.
+11. Check the Clip Cabbie reference layout: yellow title, blue artist, smaller
+    album, static decorative bars, left elapsed/right total time, progress, then battery,
+    shuffle, playback, repeat, and heart. Check scrolling and a long album title;
+    album/title duplicates should hide the album line. Decorative bar heights stay
+    fixed during playback, pause, and silence. Check seeking, pause,
+    and the end of a track. The counter, lock/volume icons, and Next stay absent.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
     Change Genre shows its target and the asterisk appears. Let the current song
     finish: it must not restart or briefly
@@ -131,7 +132,9 @@ and replacement rename; failure preserves the previous playlist and displayed
 membership. Membership is cached per displayed track, invalidated on track change
 or WPS re-entry. A revision counter invalidates Home suggestions on the next visit.
 The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
-(pending genre). `clip_home` selects the Clip Cabbie variant during packaging.
+(pending genre). The reference bars and footer icons are small monochrome bitmap
+assets; the bars never read audio or enable peak-meter refreshes. Their source
+palette uses black ink on white, which the mono loader maps to lit Clip pixels. `clip_home` selects the Clip Cabbie variant during packaging.
 
 Change Genre prepares the inactive pool/queue under the playlist lock without
 stopping audio. Pending positive peeks/checks see that queue; forward progression

@@ -119,14 +119,19 @@ playlist is created on the first like if absent; prepared relative paths and
 Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
-Now Playing shows the song title once, followed by the artist. Repeated
-comma-separated artist credits are displayed once without changing the music tags.
-The progress bar is now near the bottom. The countdown underneath, such as
-**-2:34**, shows remaining song time. The same footer row contains **battery/charging**,
-**shuffle/change genre**, and **playback state** (playing, paused, stopped, or
-seeking). The previous lock, volume, and repeat icons and track counter are
-removed from Now Playing. These icons display status; use the physical buttons
-to control playback.
+Now Playing follows the reference layout: centered yellow song title, blue
+artist, then a smaller blue album line. The album line is hidden when it matches
+the song title. Repeated comma-separated artist credits display once without
+changing the music tags. Fixed-height decorative bars sit above elapsed time (left) and total
+song duration (right), followed by the full-width progress bar.
+
+Five evenly spaced footer icons sit below the progress bar: **battery/charging**,
+**shuffle/change genre**, **playback state**, **repeat mode**, and the **like heart**.
+The icons use clean pixel shapes matching the reference: battery, crossed arrows,
+filled play triangle (or pause/stop), loop arrows, and outlined/filled heart.
+The shuffle and repeat symbols remain visible; repeat-one adds a small 1. These icons display
+status and controls; use the physical buttons and Quick Screen to operate them.
+The track counter, lock/volume indicators, and Next section remain absent.
 
 During Home genre autoplay, **hold Home (Insert), then press Left** in the Quick
 Screen to select **Change Genre**. A different genre is selected from playable
