@@ -122,13 +122,16 @@ of absolute paths, preserving other tracks and their order.
 Now Playing follows the reference layout: centered yellow song title, blue
 artist, then a smaller blue album line. The album line is hidden when it matches
 the song title. Repeated comma-separated artist credits display once without
-changing the music tags. Fixed-height decorative bars sit above elapsed time (left) and total
-song duration (right), followed by the full-width progress bar.
+changing the music tags. Animated, audio-responsive bars sit above elapsed time (left) and total song
+duration (right), followed by the full-width progress bar. Each stereo channel
+uses the existing peak-meter levels with twelve visual levels, alternating
+shapes every 0.1 seconds, and a boosted low-level response. Maximum height is 10 pixels instead of 6; quiet passages
+produce taller movement. Pausing or stopping shows the low baseline.
 
 Five evenly spaced footer icons sit below the progress bar: **battery/charging**,
 **shuffle/change genre**, **playback state**, **repeat mode**, and the **like heart**.
 The icons use clean pixel shapes matching the reference: battery, crossed arrows,
-filled play triangle (or pause/stop), loop arrows, and outlined/filled heart.
+filled play triangle (or pause/stop), two curved repeat arrows, and outlined/filled heart.
 The shuffle and repeat symbols remain visible; repeat-one adds a small 1. These icons display
 status and controls; use the physical buttons and Quick Screen to operate them.
 The track counter, lock/volume indicators, and Next section remain absent.

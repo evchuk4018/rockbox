@@ -7,7 +7,8 @@
 %xl(E,repeat-clip.bmp,0,0,4)
 %xl(F,playmode-clip.bmp,0,0,5)
 %xl(H,heart-clip.bmp,0,0,2)
-%xl(V,bars-clip.bmp,0,0)
+%xl(V,bars-clip.bmp,0,0,24)
+%xl(W,bars-right-clip.bmp,0,0,24)
 # Title in yellow, artist and smaller album in blue.
 %V(0,2,128,8,1)
 %ac%s%?it<%it|%fn>
@@ -15,9 +16,11 @@
 %ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
 %V(0,26,128,5,2)
 %ac%s%?id<%?if(%id, !=, %it)<%id>>
-# Static reference bars, followed by elapsed time and total duration.
-%V(25,34,78,6,1)
-%xd(V)
+# Sensitive stereo audio-level bars, followed by elapsed/total time.
+%V(25,32,39,10,1)
+%?mp<%xd(Va)|%t(0.1)%?pL<%xd(Va)|%xd(Vb)|%xd(Vc)|%xd(Vd)|%xd(Ve)|%xd(Vf)|%xd(Vg)|%xd(Vh)|%xd(Vi)|%xd(Vj)|%xd(Vk)|%xd(Vl)>;%t(0.1)%?pL<%xd(Vm)|%xd(Vn)|%xd(Vo)|%xd(Vp)|%xd(Vq)|%xd(Vr)|%xd(Vs)|%xd(Vt)|%xd(Vu)|%xd(Vv)|%xd(Vw)|%xd(Vx)>|%xd(Va)|%xd(Va)|%xd(Va)>
+%V(64,32,39,10,1)
+%?mp<%xd(Wa)|%t(0.1)%?pR<%xd(Wa)|%xd(Wb)|%xd(Wc)|%xd(Wd)|%xd(We)|%xd(Wf)|%xd(Wg)|%xd(Wh)|%xd(Wi)|%xd(Wj)|%xd(Wk)|%xd(Wl)>;%t(0.1)%?pR<%xd(Wm)|%xd(Wn)|%xd(Wo)|%xd(Wp)|%xd(Wq)|%xd(Wr)|%xd(Ws)|%xd(Wt)|%xd(Wu)|%xd(Wv)|%xd(Ww)|%xd(Wx)>|%xd(Wa)|%xd(Wa)|%xd(Wa)>
 %V(3,42,60,6,3)
 %al%pc
 %V(65,42,60,6,3)

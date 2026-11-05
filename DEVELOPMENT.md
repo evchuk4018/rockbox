@@ -113,10 +113,11 @@ After building and seeding, the user should check the following with `run.ps1`:
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
 11. Check the Clip Cabbie reference layout: yellow title, blue artist, smaller
-    album, static decorative bars, left elapsed/right total time, progress, then battery,
+    album, taller animated audio bars, left elapsed/right total time, progress, then battery,
     shuffle, playback, repeat, and heart. Check scrolling and a long album title;
-    album/title duplicates should hide the album line. Decorative bar heights stay
-    fixed during playback, pause, and silence. Check seeking, pause,
+    album/title duplicates should hide the album line. Bars should respond to quiet
+    audio and move more visibly than the original six-pixel version; pause and
+    silence should show the baseline. Check the rounded repeat arrows, seeking, pause,
     and the end of a track. The counter, lock/volume icons, and Next stay absent.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
     Change Genre shows its target and the asterisk appears. Let the current song
@@ -133,8 +134,13 @@ membership. Membership is cached per displayed track, invalidated on track chang
 or WPS re-entry. A revision counter invalidates Home suggestions on the next visit.
 The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
 (pending genre). The reference bars and footer icons are small monochrome bitmap
-assets; the bars never read audio or enable peak-meter refreshes. Their source
-palette uses black ink on white, which the mono loader maps to lit Clip pixels. `clip_home` selects the Clip Cabbie variant during packaging.
+assets. Built-in `%pL`/`%pR` conditions select twelve bar frames per channel in
+adjacent 39-by-10 viewports. Two shape phases alternate every 0.1 seconds while
+playing (24 images per strip). Their existing peak-meter refresh path animates them;
+no custom PCM renderer or new skin token is needed. The bar-image height curve
+boosts low levels and increases the maximum from six pixels to ten. Paused/stopped
+playback uses the baseline frame. Source palette uses black ink on white, which
+the mono loader maps to lit Clip pixels. `clip_home` selects the Clip Cabbie variant during packaging.
 
 Change Genre prepares the inactive pool/queue under the playlist lock without
 stopping audio. Pending positive peeks/checks see that queue; forward progression
