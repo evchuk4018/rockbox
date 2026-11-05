@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "home_screen.h"
+#include "home_autoplay.h"
 #include "action.h"
 #include "abrepeat.h"
 #include "audio.h"
@@ -38,6 +39,7 @@ static bool sample_track(const char *path)
 
 static void refresh_songs(void)
 {
+    home_scores_compact();
     home_sample_begin(&picks, ((uint32_t)rand() << 16) ^ rand());
     if (file_exists(HOME_LIKED_PLAYLIST))
         playlist_entries_iterate(HOME_LIKED_PLAYLIST, NULL, sample_track);
@@ -45,7 +47,6 @@ static void refresh_songs(void)
     picks.initialized = true;
 }
 
-/* Future autoplay can build a queue from this seed track without changing Home. */
 int home_play_suggestion(const char *path)
 {
     if (!file_exists(path))
@@ -55,10 +56,12 @@ int home_play_suggestion(const char *path)
     }
     if (!warn_on_pl_erase())
         return GO_TO_ROOT;
+    const char *queue = home_autoplay_prepare(path);
+    if (!queue)
+        return GO_TO_ROOT;
     ab_reset_markers();
-    if (playlist_create(NULL, NULL) < 0 ||
-        playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true) < 0 ||
-        playlist_set_single_track() < 0)
+    if (playlist_create(ROCKBOX_DIR, strrchr(queue, '/') + 1) < 0 ||
+        playlist_set_home_autoplay() < 0)
     {
         splash(HZ * 2, ID2P(LANG_FAILED));
         return GO_TO_ROOT;
@@ -107,6 +110,8 @@ int home_screen(void)
 {
     if (home_refresh_due(&picks, (uint32_t)current_tick))
         refresh_songs();
+    if (home_scores_save_failed())
+        splash(HZ * 2, ID2P(LANG_HOME_SCORE_SAVE_FAILED));
 
     int result = GO_TO_ROOT;
     struct gui_synclist list;

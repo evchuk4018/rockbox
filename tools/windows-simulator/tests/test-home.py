@@ -56,12 +56,53 @@ class HomeTests(unittest.TestCase):
             work = Path(directory)
             headers = {
                 "config.h": "#pragma once\n#define SANSA_CLIP\n",
-                "adapter.h": "#define __ACTION_H__\n#define MISC_H\n#include <action.h>\n#include <misc.h>\n",
+                "adapter.h": "#define __ACTION_H__\n#define MISC_H\n#define __PLAYLIST_H__\n#define __SETTINGS_H__\n#define _TAGCACHE_H\n#define _APPEVENTS_H\n#include <action.h>\n#include <misc.h>\n#include <playlist.h>\n#include <settings.h>\n#include <tagcache.h>\n#include <appevents.h>\n",
                 "rbpaths.h": '#pragma once\n#define ROCKBOX_DIR "."\n',
-                "kernel.h": "#pragma once\n#define HZ 100\n",
+                "kernel.h": "#pragma once\n#define HZ 100\n#define MIN(a,b) ((a)<(b)?(a):(b))\nstruct mutex { int unused; };\nvoid mutex_init(struct mutex *);\nvoid mutex_lock(struct mutex *);\nvoid mutex_unlock(struct mutex *);\nvoid yield(void);\n",
                 "action.h": "#pragma once\nenum { ACTION_NONE, ACTION_STD_PREV, ACTION_STD_PREVREPEAT, ACTION_STD_MENU, ACTION_WPS_MENU };\n",
                 "misc.h": "#pragma once\nint read_line(int, char *, int);\n",
                 "string-extra.h": "#pragma once\n#include <stddef.h>\nsize_t strlcpy(char *, const char *, size_t);\n",
+                "core_alloc.h": "#pragma once\n#include <stddef.h>\nint core_alloc(size_t);\nint core_free(int);\nvoid *core_get_data(int);\nvoid *core_get_data_pinned(int);\nvoid core_put_data_pinned(void *);\n",
+                "fixedpoint.h": "#pragma once\nlong fp16_log(int);\n",
+                "timefuncs.h": "#pragma once\n#include <time.h>\n#include <stdbool.h>\nstruct tm *get_time(void);\nbool valid_time(const struct tm *);\n",
+                "metadata.h": "#pragma once\n#include <stdbool.h>\n#include <file.h>\nstruct mp3entry { char path[MAX_PATH]; char *title, *artist, *genre_string; unsigned long elapsed, length; };\nbool get_metadata(struct mp3entry *, int, const char *);\n",
+                "audio.h": "#pragma once\n#include <metadata.h>\nenum { TEF_NONE, TEF_CURRENT=1, TEF_AUTO_SKIP=2, TEF_REWIND=4 };\nstruct track_event { unsigned int flags; struct mp3entry *id3; };\nvoid audio_stop(void);\n",
+                "appevents.h": "#pragma once\n#include <stdbool.h>\nenum { PLAYBACK_EVENT_TRACK_CHANGE, PLAYBACK_EVENT_TRACK_FINISH };\nbool add_event(unsigned short, void (*)(unsigned short, void *));\n",
+                "lang.h": "#pragma once\n#include <stdint.h>\nenum { LANG_HOME_DATABASE, LANG_TAGCACHE_BUSY, LANG_FAILED };\n#define ID2P(x) ((const char *)(intptr_t)(x))\n",
+                "splash.h": "#pragma once\nvoid splash(int, const char *);\n",
+                "settings.h": "#pragma once\n#include <stdbool.h>\nstruct test_settings { int repeat_mode, next_folder; bool playlist_shuffle; int max_files_in_playlist; };\nextern struct test_settings global_settings;\n",
+                "playlist.h": """#pragma once
+#include <stdbool.h>
+#include <file.h>
+#define PLAYLIST_FLAG_MODIFIED (1u << 0)
+#define PLAYLIST_FLAG_DIRPLAY (1u << 1)
+#define PLAYLIST_FLAG_SINGLE_TRACK (1u << 2)
+#define PLAYLIST_FLAG_HOME_AUTOPLAY (1u << 3)
+struct playlist_info {
+    int amount, index, first_index, last_insert_pos, control_fd;
+    unsigned int flags;
+    unsigned long *indices;
+    bool started;
+    char filename[MAX_PATH];
+};
+struct playlist_track_info { char filename[MAX_PATH]; };
+struct playlist_info *playlist_get_current(void);
+char *playlist_get_name(const struct playlist_info *, char *, int);
+int playlist_get_track_info(struct playlist_info *, int, struct playlist_track_info *);
+int playlist_create(const char *, const char *);
+int playlist_set_home_autoplay(void);
+""",
+                "tagcache.h": """#pragma once
+#include <stdbool.h>
+enum { tag_filename, tag_genre, clause_is };
+struct tagcache_search_clause { int tag, type; char *str; };
+struct tagcache_search { int index; const char *genre; };
+bool tagcache_is_usable(void);
+bool tagcache_search(struct tagcache_search *, int);
+bool tagcache_search_add_clause(struct tagcache_search *, struct tagcache_search_clause *);
+bool tagcache_get_next(struct tagcache_search *, char *, long);
+void tagcache_search_finish(struct tagcache_search *);
+""",
                 "file.h": """#pragma once
 #include <fcntl.h>
 #include <unistd.h>
@@ -71,10 +112,13 @@ int test_write(int, const void *, size_t);
 int test_open(const char *, int, ...);
 int test_sync(int);
 int test_rename(const char *, const char *);
+int test_truncate(int, off_t);
+bool file_exists(const char *);
 #define write test_write
 #define open test_open
 #define fsync test_sync
 #define rename test_rename
+#define ftruncate test_truncate
 """,
             }
             for name, text in headers.items():
@@ -86,7 +130,10 @@ int test_rename(const char *, const char *);
                 "static int get_next_index(", "bool playlist_check(", "int playlist_next(",
                 "int playlist_get_repeat_mode(", "bool playlist_allow_dirplay(",
                 "int update_playlist_flags_unlocked(", "int playlist_set_single_track(",
+                "int playlist_set_home_autoplay(",
             ))]
+            fixedpoint = (ROOT / "lib/fixedpoint/fixedpoint.c").read_text(encoding="utf-8")
+            extracted.append(function(fixedpoint, "long fp16_log("))
             extracted.append(function(abrepeat[abrepeat.index('#else /*def AB_REPEAT_ENABLE*/'):],
                                       "static inline bool ab_repeat_mode_enabled("))
             harness = (Path(__file__).parent / "home-harness.c").read_text(encoding="utf-8")
@@ -94,8 +141,9 @@ int test_rename(const char *, const char *);
             executable = work / "home-test.exe"
             env = os.environ.copy()
             env["PATH"] = str(Path(gcc).parent) + os.pathsep + env["PATH"]
-            subprocess.run([gcc, "-std=c11", "-Wall", "-Wextra", "-Werror", "-include", str(work / "adapter.h"), "-I", str(work), "-I", str(ROOT / "apps"),
-                            str(ROOT / "apps/home_data.c"), str(work / "test.c"), "-o", str(executable)], check=True, env=env)
+            subprocess.run([gcc, "-std=c11", "-fwrapv", "-Wall", "-Wextra", "-Werror", "-include", str(work / "adapter.h"), "-I", str(work), "-I", str(ROOT / "apps"),
+                            str(ROOT / "apps/home_data.c"), str(ROOT / "apps/home_scores.c"),
+                            str(ROOT / "apps/home_autoplay.c"), str(work / "test.c"), "-o", str(executable)], check=True, env=env)
             subprocess.run([str(executable)], cwd=work, check=True, env=env)
 
 

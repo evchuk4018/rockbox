@@ -1,10 +1,10 @@
 /* Song sampling and persistent playlist pins. SPDX-License-Identifier: GPL-2.0-or-later */
-#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include "home_screen.h"
+#include "home_autoplay.h"
 #include "action.h"
 #include "kernel.h"
 #include "misc.h"
@@ -22,27 +22,11 @@ void home_handle_action(int action)
     }
 }
 
-/* Seeded ranks let us sample genres, then tracks within each genre, in one
- * pass using only three slots. Duplicate playlist entries have no extra weight. */
-static uint32_t rank_text(const char *text, uint32_t seed, bool fold_case)
-{
-    uint32_t hash = 2166136261u ^ seed;
-    while (*text)
-    {
-        unsigned char c = *text++;
-        hash = (hash ^ (fold_case ? tolower(c) : c)) * 16777619u;
-    }
-    hash ^= hash >> 16;
-    hash *= 0x7feb352du;
-    hash ^= hash >> 15;
-    hash *= 0x846ca68bu;
-    return hash ^ (hash >> 16);
-}
-
 void home_sample_begin(struct home_picks *picks, uint32_t seed)
 {
     picks->count = 0;
     picks->seed = seed;
+    picks->score_time = home_score_time();
 }
 
 void home_sample_add(struct home_picks *picks, const char *path,
@@ -52,8 +36,8 @@ void home_sample_add(struct home_picks *picks, const char *path,
         !path || !path[0] || strlen(path) >= MAX_PATH)
         return;
 
-    uint32_t genre_rank = rank_text(genre, picks->seed, true);
-    uint32_t song_rank = rank_text(path, picks->seed ^ 0x9e3779b9u, false);
+    uint64_t song_rank = home_weighted_rank(path, picks->seed,
+        home_score_get(path, picks->score_time));
     int slot = -1;
     for (int i = 0; i < picks->count; i++)
     {
@@ -76,9 +60,9 @@ void home_sample_add(struct home_picks *picks, const char *path,
         {
             slot = 0;
             for (int i = 1; i < picks->count; i++)
-                if (picks->songs[i].genre_rank > picks->songs[slot].genre_rank)
+                if (picks->songs[i].song_rank > picks->songs[slot].song_rank)
                     slot = i;
-            if (genre_rank >= picks->songs[slot].genre_rank)
+            if (song_rank >= picks->songs[slot].song_rank)
                 return;
         }
     }
@@ -86,7 +70,6 @@ void home_sample_add(struct home_picks *picks, const char *path,
     struct home_song *song = &picks->songs[slot];
     strlcpy(song->path, path, sizeof(song->path));
     strlcpy(song->genre, genre, sizeof(song->genre));
-    song->genre_rank = genre_rank;
     song->song_rank = song_rank;
     if (!title || !title[0])
     {
@@ -95,6 +78,14 @@ void home_sample_add(struct home_picks *picks, const char *path,
     }
     snprintf(song->label, sizeof(song->label), "%s%s%s", title,
              artist && artist[0] ? " — " : "", artist ? artist : "");
+    /* Only three slots: keep the strongest random priority at the top. */
+    for (int i = 1; i < picks->count; i++)
+        for (int j = i; j > 0 && picks->songs[j].song_rank < picks->songs[j - 1].song_rank; j--)
+        {
+            struct home_song swap = picks->songs[j];
+            picks->songs[j] = picks->songs[j - 1];
+            picks->songs[j - 1] = swap;
+        }
 }
 
 bool home_refresh_due(const struct home_picks *picks, uint32_t now)

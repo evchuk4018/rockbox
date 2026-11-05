@@ -92,6 +92,9 @@
 
 #include "audio_thread.h"
 #include "playback.h"
+#ifdef SANSA_CLIP
+#include "home_autoplay.h"
+#endif
 #include "tdspeed.h"
 #if defined(HAVE_RECORDING) && !defined(SIMULATOR)
 #include "pcm_record.h"
@@ -203,6 +206,9 @@ int main(void)
 
 #if !defined(BOOTLOADER)
     allocate_playback_log();
+#ifdef SANSA_CLIP
+    home_autoplay_init();
+#endif
     if (!file_exists(ROCKBOX_DIR"/playername.txt"))
     {
         int fd = open(ROCKBOX_DIR"/playername.txt", O_CREAT|O_WRONLY|O_TRUNC, 0666);

@@ -10,6 +10,7 @@ shared Rockbox C code with original Clip display and button configuration.
 | --- | --- |
 | Main menu and navigation | `apps/root_menu.c`, `apps/menu.c`, `apps/menu.h` |
 | Clip Home, suggestions, and pins | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_screen.h` |
+| Genre autoplay and persistent listening scores | `apps/home_autoplay.c`, `apps/home_scores.c`, `apps/home_autoplay.h` |
 | Settings and submenus | `apps/menus/`, `apps/settings_list.c`, `apps/settings.c` |
 | Lists, status bar, and layout | `apps/gui/`, including `list.c` and `viewport.c` |
 | Playback screen and skins | `apps/gui/wps.c`, `apps/gui/skin_engine/` |
@@ -52,12 +53,14 @@ Run the focused host checks with:
 python .\tools\windows-simulator\tests\test-home.py
 ```
 
-These compile the production Home data code and actual playlist progression
-functions with small Windows host adapters. They cover genre and track
-uniqueness, case-insensitive genres, Unicode paths, 30-minute expiry and timer
-wraparound, single-press refresh, Home/Back parent state, pin ordering and save
-failures, all repeat modes, normal playlist progression, and non-destructive
-test-library seeding. They do not drive the simulator's GUI or audio.
+These compile the production Home data, score store, queue builder, fixed-point
+logarithm, and actual playlist progression functions with small Windows host
+adapters. They cover genre/track uniqueness, whole-library genre matching,
+Unicode paths, refresh/navigation, pins, repeat modes, continuous autoplay,
+scoring thresholds and session ownership, duplicate finish events, decay,
+restart persistence, partial/failed writes, compaction failures, weighted
+selection, and an 850-track memory check. The adapters supply the database,
+metadata and audio events; the checks do not drive GUI or audio playback.
 
 The existing regression checks run in the MSYS2 UCRT64 environment:
 
@@ -73,9 +76,13 @@ After building and seeding, the user should check the following with `run.ps1`:
    Test Mix 1 and 2, then Settings. Long selected titles should scroll.
 2. Press **Up** on the first song to refresh. Hold Up to confirm it does not
    repeatedly refresh. Start a song, return Home, and refresh without interrupting it.
-3. Let a Home suggestion finish with repeat off, all, one, shuffle, and A–B
-   selected in turn. Each should stop after that song, and the saved repeat
-   preference should remain unchanged.
+3. Initialize the database once using Settings → Settings → General Settings →
+   Database → Initialize Now; restart if prompted. Select a Home suggestion and
+   confirm it plays first, then another song of the same genre, including songs
+   outside Liked Songs. Try saved repeat off, all, one, shuffle, and A–B: genre
+   autoplay should continue in each case and preserve the preference. Check a
+   small genre through a pass boundary and confirm no immediate repeat when
+   another song is available. A one-song genre should keep playing.
 4. Open a pinned mix, choose a track, and confirm normal playlist playback.
    Back from its track list should return Home. Insert should always return Home.
 5. Open **Settings → Playlists**, hold **Space** on Test Mix 3, and pin it.
@@ -85,12 +92,78 @@ After building and seeding, the user should check the following with `run.ps1`:
    should return to that menu; Insert should return to the song-first Home.
 7. After 30 minutes away from Home, return and confirm that suggestions refresh.
    Do not expect a refresh merely from sitting on Home.
+8. During Home autoplay, skip before halfway, skip/stop after halfway, and let a
+   song finish. The latest matching TSV rows should gain 0, 1, and 2 points
+   respectively. Pausing should not create a row. Repeat through a pinned mix
+   and confirm its playback does not update these scores.
+9. Stop, restart the simulator, and resume the playlist. Check the saved queue
+   order and continued scoring. Update the database after changing the library
+   and confirm the scores persist. New sessions use the updated library; an
+   existing session keeps its genre pool until you start a new one.
 
 The Home sources and integration are compiled only for `SANSA_CLIP`; they share
-the simulator and device code path. One-song playback uses a persisted playlist
-flag, not a change to global repeat settings. `home_play_suggestion(path)` is
-the playback entry point to extend when autoplay is added. Pins use a checked
-temporary file, sync, and replacement rename; failed writes retain the old file.
+the simulator and device code path. `home_play_suggestion(path)` validates the
+database/seed, stops old playback, prepares a weighted genre playlist, and starts
+it with `PLAYLIST_FLAG_HOME_AUTOPLAY`. This persisted flag overrides effective
+repeat behavior without changing saved settings. At the existing repeat-shuffle
+boundary, autoplay writes a fresh order to the inactive one of two M3U8 files,
+then loads it through the normal playlist API. It reuses the session's paths
+without rescanning tags or the library. Missing paths are removed on the next
+pass; no remaining paths means stop. The normal playlist-size limit applies.
+
+Track-change events capture session ownership, so replacing the playlist still
+credits the old Home track correctly. Finish events append one small score row;
+rewind notifications and duplicate finishes are ignored. A one-second end
+tolerance accommodates codec rounding; an automatic decoder failure far from
+the end is not a full completion. Explicit stops clear the automatic-finish flag
+on the Clip. Successful appends are synced; short/failed writes are rolled back.
+Home shows a save-failure message on the next visit if storage rejected a score.
+
+The score index stores hashes, numbers, and file offsets, with full paths kept
+on disk and compared to resolve hash collisions. Its capacity doubles as needed.
+An 850-track host check retained 28 KiB and peaked at 42 KiB, including temporary
+queue construction or index growth. Queue sort records are 16 bytes per matching
+track on the Windows host. There is no recommendation thread or periodic scan.
+Decay and weighted selection use fixed-point arithmetic, calculated only when
+reading/updating scores or generating picks. A bad/backward clock does not
+increase a score through decay.
+
+Pins and generated queues use checked temporary files, sync, and replacement
+rename. Score rows are consolidated only on Home refresh after their count
+exceeds four times the number of tracked songs plus 64. Failed consolidation
+preserves the original file. A power loss can discard the last unfinished
+append; older complete records remain readable.
+
+### Listening data for external tools
+
+Copy `.rockbox/home-scores.tsv` after stopping playback. It is a UTF-8,
+tab-separated file with no header. Ignore blank/malformed lines and an
+unterminated final line. The **last complete row for each decoded path wins**;
+rows are cumulative snapshots, not additive events. The six columns are:
+
+| Column | Meaning |
+| --- | --- |
+| `score_q16` | Unsigned fractional points; divide by 65,536 for points |
+| `updated` | Player-clock epoch seconds since 1970; 0 means its clock was invalid |
+| `completed` | Cumulative natural completions |
+| `late_exits` | Cumulative non-completion exits at or beyond halfway |
+| `early_exits` | Cumulative other exits, including unknown-duration partial plays |
+| `path` | Exact, case-sensitive Rockbox music path in UTF-8 |
+
+The path escapes `%`, tab, carriage return and newline as `%25`, `%09`, `%0D`
+and `%0A`. Decode once with a percent decoder, such as Python's
+`urllib.parse.unquote`. Map `/MusicLibrary/...` to the corresponding local or
+homelab music root and read artist/title/album tags from the music itself.
+Different capitalization identifies different paths. Moving/renaming a file
+starts a separate score; database rebuilds do not change path identity.
+
+For current recommendations, apply
+`(score_q16 / 65536) * 2 ** (-max(0, now - updated) / 2592000)` using a clock
+consistent with the player's. If either timestamp is invalid, keep the stored
+balance. The device uses an integer approximation, with exact halving per full
+30-day interval, before adding new points. Counts never decay. This version
+provides readable data for external tools; automatic score import and external
+service integration are outside the feature.
 
 The setup compiled the simulator, codecs, and plugins and launched a responding
 Sansa Clip window. Manual button navigation, visible labels, file browsing, and

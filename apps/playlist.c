@@ -108,6 +108,9 @@
 #include "plugin.h" /* To borrow a temp buffer to rewrite a .m3u8 file */
 #include "iap-usb.h"
 #include "logdiskf.h"
+#ifdef SANSA_CLIP
+#include "home_autoplay.h"
+#endif
 #ifdef HAVE_DIRCACHE
 #include "dircache.h"
 #endif
@@ -1716,9 +1719,11 @@ static int get_next_index(const struct playlist_info* playlist, int steps,
     if (playlist->flags & PLAYLIST_FLAG_SINGLE_TRACK)
         repeat_mode = REPEAT_OFF;
     else if (repeat_mode == -1)
-        repeat_mode = global_settings.repeat_mode;
+        repeat_mode = playlist->flags & PLAYLIST_FLAG_HOME_AUTOPLAY ?
+                      REPEAT_SHUFFLE : global_settings.repeat_mode;
 
-    if (repeat_mode == REPEAT_SHUFFLE && playlist->amount <= 1)
+    if (repeat_mode == REPEAT_SHUFFLE && playlist->amount <= 1 &&
+        !(playlist->flags & PLAYLIST_FLAG_HOME_AUTOPLAY))
     {
         repeat_mode = REPEAT_ALL;
     }
@@ -2746,8 +2751,22 @@ int playlist_set_single_track(void)
     return result;
 }
 
+#ifdef SANSA_CLIP
+int playlist_set_home_autoplay(void)
+{
+    struct playlist_info *playlist = &current_playlist;
+    playlist_write_lock(playlist);
+    int result = update_playlist_flags_unlocked(playlist,
+        PLAYLIST_FLAG_HOME_AUTOPLAY, PLAYLIST_FLAG_SINGLE_TRACK | PLAYLIST_FLAG_DIRPLAY);
+    playlist_write_unlock(playlist);
+    return result;
+}
+#endif
+
 int playlist_get_repeat_mode(void)
 {
+    if (current_playlist.flags & PLAYLIST_FLAG_HOME_AUTOPLAY)
+        return REPEAT_SHUFFLE;
     return current_playlist.flags & PLAYLIST_FLAG_SINGLE_TRACK ?
            REPEAT_OFF : global_settings.repeat_mode;
 }
@@ -2759,7 +2778,7 @@ bool playlist_allow_dirplay(const struct playlist_info *playlist)
         playlist = &current_playlist;
 
     if (playlist_modified(playlist) ||
-        (playlist->flags & PLAYLIST_FLAG_SINGLE_TRACK))
+        (playlist->flags & (PLAYLIST_FLAG_SINGLE_TRACK | PLAYLIST_FLAG_HOME_AUTOPLAY)))
         return false;
 
     return !!(playlist->flags & PLAYLIST_FLAG_DIRPLAY);
@@ -2985,6 +3004,14 @@ int playlist_next(int steps)
     if (index < 0)
     {
         /* end of playlist... or is it */
+#ifdef SANSA_CLIP
+        if (playlist->flags & PLAYLIST_FLAG_HOME_AUTOPLAY)
+        {
+            if (steps > 0)
+                index = home_autoplay_next_round();
+        }
+        else
+#endif
         if (repeat_mode == REPEAT_SHUFFLE && playlist->amount > 1)
         {
             /* Repeat shuffle mode.  Re-shuffle playlist and resume play */

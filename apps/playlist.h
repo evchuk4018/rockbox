@@ -42,6 +42,7 @@
 #define PLAYLIST_FLAG_MODIFIED (1u << 0) /* playlist was manually modified */
 #define PLAYLIST_FLAG_DIRPLAY  (1u << 1) /* enable directory skipping */
 #define PLAYLIST_FLAG_SINGLE_TRACK (1u << 2) /* play once, independent of repeat */
+#define PLAYLIST_FLAG_HOME_AUTOPLAY (1u << 3) /* weighted genre passes */
 
 enum playlist_command {
     PLAYLIST_COMMAND_PLAYLIST,
@@ -120,6 +121,9 @@ void playlist_init(void) INIT_ATTR;
 void playlist_shutdown(void);
 int playlist_create(const char *dir, const char *file);
 int playlist_set_single_track(void);
+#ifdef SANSA_CLIP
+int playlist_set_home_autoplay(void);
+#endif
 int playlist_get_repeat_mode(void);
 int playlist_resume(void);
 int playlist_shuffle(int random_seed, int start_index);

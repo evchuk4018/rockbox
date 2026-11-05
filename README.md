@@ -69,8 +69,13 @@ while browsing and refresh on the next Home visit after 30 minutes, or when
 you press **Up while already on the first row**. Holding Up does not repeatedly
 refresh. Refreshing leaves playing audio alone.
 
-A suggestion plays once and stops, even with repeat enabled. Selecting a pinned
-playlist opens its tracks and uses normal playlist playback. Under
+A suggestion starts **genre autoplay**: the selected song plays first, followed
+by songs with the same genre from the whole indexed music library. Each song
+plays once per pass, then a fresh weighted order continues automatically. The
+last song is not immediately repeated when another song is available. A genre
+with just one song repeats that song. Your saved repeat and shuffle preferences
+are preserved. Selecting a pinned playlist opens its tracks and uses normal
+playlist playback. Under
 **Settings → Playlists**, hold **Space** on a playlist and choose **Pin to Home**
 or **Unpin from Home**. Up to 16 pins are saved, in the order added, in
 `simdisk/.rockbox/home-pins.txt`. The same context menu is available on a pinned
@@ -89,7 +94,34 @@ pins on reruns and never copies or edits audio. The current library produces
 by Git. Replace `simdisk/Playlists/Liked Songs.m3u8` with your prepared UTF-8
 playlist when ready; relative paths are resolved from the playlist's directory.
 Missing or unreadable tracks are skipped, and Home shows a message if no liked
-tracks with usable genres remain. Like/Unlike and autoplay are future work.
+tracks with usable genres remain. Like/Unlike is future work.
+
+Initialize the music database once under **Settings → Settings → General
+Settings → Database → Initialize Now**, then restart if prompted. Genre autoplay
+uses this existing index instead of scanning audio files. Use **Update Now**
+after adding, removing, or retagging music; normal listening and restarting do
+not require an update. Home suggestions themselves still work without the
+database, but selecting one asks you to initialize/update it before autoplay.
+
+Only Home-autoplay listening earns recommendation points, including a resumed
+Home session. A natural finish earns **2 points**. Skipping, stopping, shutting
+down, or replacing the session at or beyond halfway earns **1 point**; an
+earlier exit earns none. These thresholds use the playhead, so seeking forward
+can qualify. Pausing does not end a play. Each play is credited once.
+
+Points gradually halve every **30 days**, including time the player is off.
+Both Home suggestions and autoplay use `(1 + score)²` as their random-selection
+weight: favorites are much more likely to appear early, while new and
+lower-scored tracks still get chances. Home keeps three distinct genres.
+Scores do not change an already generated pass; they influence the next pass
+or session and the next Home refresh.
+
+Listening scores and completion/exit counts are saved independently of the
+database in `simdisk/.rockbox/home-scores.tsv`. Database updates and simulator
+rebuilds preserve them. External recommendation tools can read this documented
+UTF-8 format; see **Listening data for external tools** in `DEVELOPMENT.md`.
+Generated `home-autoplay-a.m3u8` and `home-autoplay-b.m3u8` files in the same
+directory preserve queue order for resume. No network connection is needed.
 
 ## Homelab music
 

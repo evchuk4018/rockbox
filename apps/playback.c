@@ -3166,6 +3166,12 @@ static void audio_stop_playback(void)
     pcmbuf_play_stop();
     codec_unload();
 
+#ifdef SANSA_CLIP
+    /* An explicit stop isn't a natural finish, even after an auto transition. */
+    if (filling != STATE_ENDED)
+        track_event_flags &= ~TEF_AUTO_SKIP;
+#endif
+
     /* Save resume information  - "filling" might have been set to
        "STATE_ENDED" by caller in order to facilitate end of playlist */
     audio_playlist_track_finish();

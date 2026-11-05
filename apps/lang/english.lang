@@ -17341,3 +17341,31 @@
     *: "No liked songs with genres"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_HOME_DATABASE
+  desc: Home genre autoplay needs an initialized and updated music database
+  user: core
+  <source>
+    *: "Initialize or update Database first"
+  </source>
+  <dest>
+    *: "Initialize or update Database first"
+  </dest>
+  <voice>
+    *: "Initialize or update Database first"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_HOME_SCORE_SAVE_FAILED
+  desc: Home listening scores could not be saved to storage
+  user: core
+  <source>
+    *: "Could not save listening scores"
+  </source>
+  <dest>
+    *: "Could not save listening scores"
+  </dest>
+  <voice>
+    *: "Could not save listening scores"
+  </voice>
+</phrase>

@@ -53,6 +53,8 @@ root_menu.c
 #ifdef SANSA_CLIP
 home_data.c
 home_screen.c
+home_scores.c
+home_autoplay.c
 #endif
 screens.c
 settings.c

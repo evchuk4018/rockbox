@@ -18,14 +18,14 @@ struct home_song {
     char path[MAX_PATH];
     char genre[MAX_PATH];
     char label[MAX_PATH * 2];
-    uint32_t genre_rank;
-    uint32_t song_rank;
+    uint64_t song_rank;
 };
 
 struct home_picks {
     struct home_song songs[HOME_SONG_COUNT];
     int count;
     uint32_t seed;
+    uint32_t score_time;
     uint32_t refreshed_at;
     bool initialized;
 };
