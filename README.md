@@ -125,8 +125,9 @@ the song title. Repeated comma-separated artist credits display once without
 changing the music tags. Animated, audio-responsive bars sit above elapsed time (left) and total song
 duration (right), followed by the full-width progress bar. Each stereo channel
 uses the existing peak-meter levels with twelve visual levels, alternating
-shapes every 0.1 seconds, and a boosted low-level response. Maximum height is 10 pixels instead of 6; quiet passages
-produce taller movement. Pausing or stopping shows the low baseline.
+shapes every 0.1 seconds, and extra height only for strong peaks. Low and middle
+bars keep their original heights: 1–4 pixels stay unchanged, while 5-pixel peaks
+reach 7 pixels and 6-pixel peaks reach 10. Quiet passages stay low. Pausing or stopping shows the low baseline.
 
 Five evenly spaced footer icons sit below the progress bar: **battery/charging**,
 **shuffle/change genre**, **playback state**, **repeat mode**, and the **like heart**.

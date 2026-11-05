@@ -115,8 +115,8 @@ After building and seeding, the user should check the following with `run.ps1`:
 11. Check the Clip Cabbie reference layout: yellow title, blue artist, smaller
     album, taller animated audio bars, left elapsed/right total time, progress, then battery,
     shuffle, playback, repeat, and heart. Check scrolling and a long album title;
-    album/title duplicates should hide the album line. Bars should respond to quiet
-    audio and move more visibly than the original six-pixel version; pause and
+    album/title duplicates should hide the album line. Low bars should stay low,
+    while strong peaks jump higher for a more energetic contrast. Pause and
     silence should show the baseline. Check the rounded repeat arrows, seeking, pause,
     and the end of a track. The counter, lock/volume icons, and Next stay absent.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
@@ -137,8 +137,10 @@ The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG
 assets. Built-in `%pL`/`%pR` conditions select twelve bar frames per channel in
 adjacent 39-by-10 viewports. Two shape phases alternate every 0.1 seconds while
 playing (24 images per strip). Their existing peak-meter refresh path animates them;
-no custom PCM renderer or new skin token is needed. The bar-image height curve
-boosts low levels and increases the maximum from six pixels to ten. Paused/stopped
+no custom PCM renderer or new skin token is needed. The bar-image height mapping
+keeps original 1/2/3/4-pixel bars unchanged, expands 5 to 7 and 6 to 10, and does
+not amplify the quiet frames. This increases peak contrast instead of lifting
+the entire display. Paused/stopped
 playback uses the baseline frame. Source palette uses black ink on white, which
 the mono loader maps to lit Clip pixels. `clip_home` selects the Clip Cabbie variant during packaging.
 

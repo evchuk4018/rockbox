@@ -16,7 +16,7 @@
 %ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
 %V(0,26,128,5,2)
 %ac%s%?id<%?if(%id, !=, %it)<%id>>
-# Sensitive stereo audio-level bars, followed by elapsed/total time.
+# Stereo audio bars: low levels stay low; strong peaks jump higher.
 %V(25,32,39,10,1)
 %?mp<%xd(Va)|%t(0.1)%?pL<%xd(Va)|%xd(Vb)|%xd(Vc)|%xd(Vd)|%xd(Ve)|%xd(Vf)|%xd(Vg)|%xd(Vh)|%xd(Vi)|%xd(Vj)|%xd(Vk)|%xd(Vl)>;%t(0.1)%?pL<%xd(Vm)|%xd(Vn)|%xd(Vo)|%xd(Vp)|%xd(Vq)|%xd(Vr)|%xd(Vs)|%xd(Vt)|%xd(Vu)|%xd(Vv)|%xd(Vw)|%xd(Vx)>|%xd(Va)|%xd(Va)|%xd(Va)>
 %V(64,32,39,10,1)
