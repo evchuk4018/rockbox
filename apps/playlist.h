@@ -121,7 +121,7 @@ void playlist_init(void) INIT_ATTR;
 void playlist_shutdown(void);
 int playlist_create(const char *dir, const char *file);
 int playlist_set_single_track(void);
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 int playlist_set_home_autoplay(void);
 #endif
 int playlist_get_repeat_mode(void);
@@ -173,7 +173,7 @@ bool playlist_entries_iterate(const char *filename,
 /* Shared M3U path rules; src is normalized in place. */
 ssize_t playlist_format_track_path(char *dest, char *src, int buf_length,
                                   const char *dir, size_t dir_length);
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 bool playlist_home_change_genre(void);
 #endif
 void playlist_skip_entry(struct playlist_info *playlist, int steps);

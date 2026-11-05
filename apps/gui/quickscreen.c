@@ -31,14 +31,14 @@
 #include "option_select.h"
 #include "appevents.h"
 #include "statusbar-skinned.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_autoplay.h"
 #include "playlist.h"
 #endif
 
 static bool genre_item(const struct settings_list *item)
 {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     return item && item->setting == &global_settings.playlist_shuffle &&
         home_autoplay_active();
 #else
@@ -49,7 +49,7 @@ static bool genre_item(const struct settings_list *item)
 
 static const char *qs_title(const struct settings_list *item)
 {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (genre_item(item)) return str(LANG_HOME_CHANGE_GENRE);
 #endif
     return P2STR(ID2P(item->lang_id));
@@ -217,7 +217,7 @@ static void quickscreen_draw_setting(const struct settings_list *item,
     const char *title = qs_title(item);
     const char *value = option_get_valuestring(item, buf, sizeof buf,
                                                option_value_as_int(item));
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (genre_item(item))
     {
         value = home_autoplay_pending_genre();
@@ -328,7 +328,7 @@ static void talk_qs_option(const struct settings_list *opt, bool enqueue)
 {
     if (!global_settings.talk_menu || !opt)
         return;
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (genre_item(opt))
     {
         talk_id(LANG_HOME_CHANGE_GENRE, enqueue);
@@ -380,7 +380,7 @@ static bool quickscreen_do_button(struct quickscreen * qs, int button,
 
     if (qs->items[*item] == NULL)
         return false;
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (genre_item(qs->items[*item]))
     {
         playlist_home_change_genre();
@@ -558,7 +558,7 @@ int quickscreen_show(int button_enter)
     FOR_QS_ITEMS(i)
     {
         qs.items[i] = global_settings.qs_items[i];
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
         if (i == QUICKSCREEN_LEFT &&
             home_autoplay_active())
             qs.items[i] = find_setting(&global_settings.playlist_shuffle);

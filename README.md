@@ -1,8 +1,10 @@
 # Rockbox on Windows
 
-Native Windows development setup for the **original SanDisk Sansa Clip v1**:
-Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The physical player's
-revision is still unknown. This setup builds and runs the SDL2 simulator only.
+Native Windows simulator setup for the **original SanDisk Sansa Clip v1**:
+Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The connected physical
+player was identified on November 5, 2026 as a **Sansa Clip+**, target
+`sansaclipplus` / `SANSA_CLIPPLUS`. Both targets include the custom Home and
+playback features. Hardware builds use the separate Linux ARM workflow below.
 
 ## Build and run
 
@@ -49,7 +51,46 @@ pacman -S --needed make perl diffutils zip unzip mingw-w64-ucrt-x86_64-gcc mingw
 
 Complete any MSYS2-requested shell restart before installing packages. The
 wrappers select UCRT64 for their child processes; permanent PATH changes are not
-needed. No WSL, VM, Docker, cross-compiler, firmware image, or bootloader is used.
+needed. This simulator workflow does not require WSL, Docker, or a cross-compiler.
+
+## Clip+ hardware testing
+
+The Windows `rockboxui.exe` is only a simulator. For the physical **Clip+**, run
+`bash scripts/build-clipplus.sh 2` in a Linux environment with the Rockbox
+`arm-elf-eabi` toolchain. It configures target `sansaclipplus`, builds matching
+firmware, codecs and plugins, and writes `build-sansaclipplus/rockbox.zip`.
+Rockbox documents the prebuilt `built1n/rbclient` Docker image in
+`tools/docker_rbclient/README`; it can run this helper with the source mounted
+at `/work` and `/work` as the working directory. The homelab is available through
+`ssh evanh@homelab` when a Linux build host is needed. Limit builds to two jobs
+on the shared server.
+
+Check the player's `version.sdk` and `.rockbox/rockbox-info.txt` before choosing
+a target. A Clip, Clip v2, and Clip+ require different firmware. On the connected
+player these identify `Product: Clip+` and `Target: sansaclipplus`; the internal
+storage mounted at `D:\` during this transfer. Drive letters can change.
+
+For a player with Rockbox already installed, back up `.rockbox`, then extract
+the new archive into the player's root, replacing its `.rockbox` build files.
+Keep existing settings, fonts, and personal data. This updates Rockbox through
+the existing bootloader; a new bootloader or stock firmware update is unnecessary.
+Do not copy simulator codecs or executables to the device.
+
+Copy a small set of MP3s into `/MusicLibrary`, preserving tags and artist folders,
+then seed test playlists with `python scripts/seed-home-playlists.py --simdisk D:\`.
+The helper preserves existing playlists and pins. On a newly seeded test player,
+all copied tracks start in Liked Songs and the first two test mixes are pinned.
+Eject the player through Windows, disconnect USB, and restart it. Open
+**Settings → Settings → General Settings → Database → Initialize Now** and
+restart if requested before testing Home genre autoplay. Pinned playlists can
+play immediately. On the player, the middle button pauses/resumes, Up toggles
+the like, and Home returns to the custom Home screen. Set the player's date and
+time if needed so listening-score decay uses the correct clock.
+
+The November 5 transfer's original Rockbox backup and song hash manifest are
+local, ignored files under `logs/device-transfer-20261105`. Restore the backed-up
+`.rockbox` folder to return to the previous installation. Hardware playback and
+button testing must be done on the player after disconnecting USB.
 
 ## Storage, controls, and cleanup
 
@@ -59,7 +100,7 @@ Insert for Home, and F1 for key help. Enter is not mapped to Select.
 
 ## Song-first Home
 
-The original Sansa Clip target now opens a scrolling Home list beneath the
+The Sansa Clip and Clip+ targets open a scrolling Home list beneath the
 existing header: three liked-song suggestions, pinned playlists, then
 **Settings**. That final entry opens the complete former Home menu.
 
@@ -105,7 +146,7 @@ tracks with usable genres remain.
 
 ### Now Playing controls and Likes
 
-On the original Clip's Now Playing screen, tap the **middle button (Space)**
+On the Clip or Clip+ Now Playing screen, tap the **middle button (Space in the simulator)**
 to pause or resume and tap **Up** to like or unlike the song. Holding the middle
 button still opens the context menu; holding Up still opens pitch control and
 does not also toggle the like. Menu and list controls stay the same. **Down**

@@ -92,7 +92,7 @@
 
 #include "audio_thread.h"
 #include "playback.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_autoplay.h"
 #endif
 #include "tdspeed.h"
@@ -206,7 +206,7 @@ int main(void)
 
 #if !defined(BOOTLOADER)
     allocate_playback_log();
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     home_autoplay_init();
 #endif
     if (!file_exists(ROCKBOX_DIR"/playername.txt"))

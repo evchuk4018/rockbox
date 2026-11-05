@@ -4,7 +4,7 @@
    version numbers should be updated. It also means that changing defines in
    the various config*.h files could also break back compatibility */
 
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 clip_home
 #endif
 

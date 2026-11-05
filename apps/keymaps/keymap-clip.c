@@ -53,7 +53,7 @@ static const struct button_mapping button_context_standard[]  = {
 
 
 static const struct button_mapping button_context_wps[]  = {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     { ACTION_WPS_TOGGLE_LIKE, BUTTON_UP|BUTTON_REL,     BUTTON_UP },
     { ACTION_WPS_PLAY,     BUTTON_SELECT|BUTTON_REL,    BUTTON_SELECT },
 #else
@@ -78,7 +78,7 @@ static const struct button_mapping button_context_wps[]  = {
     { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN,                  BUTTON_NONE },
     { ACTION_WPS_VOLDOWN,   BUTTON_VOL_DOWN|BUTTON_REPEAT,    BUTTON_NONE },
 
-#ifndef SANSA_CLIP
+#if !defined(SANSA_CLIP) && !defined(SANSA_CLIPPLUS)
     { ACTION_WPS_BROWSE,        BUTTON_SELECT|BUTTON_REL,     BUTTON_SELECT },
 #endif
     { ACTION_WPS_CONTEXT,       BUTTON_SELECT|BUTTON_REPEAT,  BUTTON_SELECT },

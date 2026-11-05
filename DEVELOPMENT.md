@@ -3,6 +3,9 @@
 Work in `C:\RockboxDev\rockbox`. Build with `build.ps1 -StopSimulator`, then
 launch with `run.ps1`. The simulator is a native Windows application; it runs
 shared Rockbox C code with original Clip display and button configuration.
+The physical player is a Clip+. Build its ARM firmware with
+`scripts/build-clipplus.sh` in a Linux Rockbox toolchain environment; see
+README.md for installation and the device test procedure.
 
 ## Source map
 
@@ -20,7 +23,7 @@ shared Rockbox C code with original Clip display and button configuration.
 | Windows keys to simulated buttons | `uisimulator/buttonmap/sansa-clip.c` |
 | Playback, buffering, and codecs | `apps/playback.c`, `apps/pcmbuf.c`, `lib/rbcodec/` |
 | Windows SDL display/audio/events | `firmware/target/hosted/sdl/` |
-| Clip display and features | `firmware/export/config/sansaclip.h` |
+| Clip and Clip+ display and features | `firmware/export/config/sansaclip.h`, `firmware/export/config/sansaclipplus.h` |
 | Simulator configuration | `tools/configure`, `tools/root.make`, `docs/UISIMULATOR` |
 
 Edit source files rather than generated files in `build-sansaclip-sim`.
@@ -61,7 +64,8 @@ scoring thresholds and session ownership, duplicate finish events, decay,
 restart persistence, partial/failed writes, compaction failures, weighted
 selection, 20/20/5 batching without repeats, skipped versus unreached tracks,
 legacy queue adoption, and 850/5,000-track memory checks. They also cover playlist-backed likes, relative/Unicode/case-sensitive paths,
-duplicate removal and save failures, short/long button events for Clip and Clip+,
+duplicate removal and save failures, custom short/long button events for Clip
+and Clip+, unchanged Clip v2 button behavior,
 and deferred genre changes through production playlist look-ahead and progression.
 The adapters supply the database, metadata and audio events; the checks do not drive GUI or audio playback.
 
@@ -132,7 +136,7 @@ playback, with exact case-sensitive identity. Writes use a synced temporary file
 and replacement rename; failure preserves the previous playlist and displayed
 membership. Membership is cached per displayed track, invalidated on track change
 or WPS re-entry. A revision counter invalidates Home suggestions on the next visit.
-The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
+The Clip/Clip+ skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
 (pending genre). The reference bars and footer icons are small monochrome bitmap
 assets. Built-in `%pL`/`%pR` conditions select twelve bar frames per channel in
 adjacent 39-by-10 viewports. Two shape phases alternate every 0.1 seconds while
@@ -152,8 +156,9 @@ the volatile request; no extra persistent pending-request file is needed. Old-tr
 finish scoring remains attached to its original play. A queued genre starts a fresh
 used-song cycle, then uses the existing 20-song batching and persistence.
 
-The Home sources and integration are compiled only for `SANSA_CLIP`; they share
-the simulator and device code path. `home_play_suggestion(path)` validates the
+The Home sources and integration are compiled for `SANSA_CLIP` and
+`SANSA_CLIPPLUS`; they share the simulator and device code path. Both targets
+select the custom Cabbie skin through `clip_home`. `home_play_suggestion(path)` validates the
 database/seed, stops old playback, prepares a weighted genre playlist, and starts
 it with `PLAYLIST_FLAG_HOME_AUTOPLAY`. This persisted flag overrides effective
 repeat behavior without changing saved settings. At the existing repeat-shuffle
@@ -246,5 +251,9 @@ Windows compatibility fixes in `tools/addtargetdir.pl` and `tools/genlang`, plus
 LF handling for theme packaging, are preserved in Git. The regression checks
 remain under `tools/windows-simulator/tests/`.
 
-The simulator does not emulate the ARM CPU or verify physical hardware. Device
-firmware, USB devices, bootloaders, and flashing are outside this workflow.
+The simulator does not emulate the ARM CPU or verify physical hardware. The
+separate Clip+ build compiles the actual ARM firmware, codecs, plugins, and
+theme. Installation replaces build files under `.rockbox` through the existing
+bootloader; it does not flash a bootloader. Verify copied files against the build
+archive and music sources, then leave physical controls and audio playback to
+manual testing after USB disconnection.

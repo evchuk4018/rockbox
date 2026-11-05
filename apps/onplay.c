@@ -62,7 +62,7 @@
 #include "viewport.h"
 #include "pathfuncs.h"
 #include "shortcuts.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
 #endif
 #include "misc.h"
@@ -1287,7 +1287,7 @@ MENUITEM_FUNCTION(view_playlist_item, 0, ID2P(LANG_VIEW),
                   view_playlist,
                   onplaymenu_callback, Icon_Playlist);
 
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 static int toggle_home_pin(void)
 {
     if (home_toggle_pin(selected_file.path) < 0)
@@ -1311,7 +1311,7 @@ MENUITEM_FUNCTION_DYNTEXT(home_pin_item, 0, toggle_home_pin,
 MAKE_ONPLAYMENU( tree_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            onplaymenu_callback, Icon_file_view_menu,
            &view_playlist_item, &tree_playlist_menu, &cat_playlist_menu,
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
            &home_pin_item,
 #endif
            &rename_file_item, &clipboard_cut_item, &clipboard_copy_item,
@@ -1344,7 +1344,7 @@ static int onplaymenu_callback(int action,
             break;
         case ACTION_REQUEST_MENUITEM:
             if (this_item == &view_playlist_item
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
                 || this_item == &home_pin_item
 #endif
                )

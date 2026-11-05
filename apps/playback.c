@@ -20,7 +20,7 @@
  *
  ****************************************************************************/
 #include "config.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_autoplay.h"
 #endif
 #include "system.h"
@@ -3169,7 +3169,7 @@ static void audio_stop_playback(void)
     pcmbuf_play_stop();
     codec_unload();
 
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     /* An explicit stop isn't a natural finish, even after an auto transition. */
     home_autoplay_cancel_genre();
     if (filling != STATE_ENDED)

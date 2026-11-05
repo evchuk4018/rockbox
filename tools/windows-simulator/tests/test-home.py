@@ -150,7 +150,7 @@ int main(void)
 {
     const struct button_mapping *wps = button_context_wps;
     const struct button_mapping *std = button_context_standard;
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_PLAY);
     assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_UP) == ACTION_WPS_TOGGLE_LIKE);
 #else
@@ -173,9 +173,9 @@ int main(void)
             source = Path(directory) / "buttons.c"
             source.write_text(code, encoding="utf-8")
             executable = Path(directory) / "buttons.exe"
-            for clip in (True, False):
+            for target in ("SANSA_CLIP", "SANSA_CLIPPLUS", "SANSA_CLIPV2"):
                 subprocess.run([gcc, "-std=c11", "-Wall", "-Wextra", "-Werror",
-                                *(["-DSANSA_CLIP"] if clip else []), str(source), "-o", str(executable)], check=True)
+                                f"-D{target}", str(source), "-o", str(executable)], check=True)
                 subprocess.run([str(executable)], check=True)
 
     def test_native_home_and_playback(self):

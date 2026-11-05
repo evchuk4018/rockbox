@@ -38,7 +38,7 @@
 #include "talk.h"
 #include "audio.h"
 #include "shortcuts.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
 #endif
 
@@ -970,7 +970,7 @@ void root_menu(void)
                  * button to be handled by HOST instead of rockbox */
                 ignore_back_button_stub(true);
 
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
                 if (home_in_settings)
                 {
                     next_screen = do_menu(&root_menu_, &selected, NULL, false);

@@ -50,7 +50,7 @@ playlist_catalog.c
 playlist_viewer.c
 plugin.c
 root_menu.c
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 home_data.c
 home_liked.c
 home_screen.c

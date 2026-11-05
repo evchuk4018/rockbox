@@ -21,7 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "config.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
 #endif
 
@@ -757,7 +757,7 @@ long gui_wps_show(void)
 
         if (restore)
         {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             home_liked_invalidate();
 #endif
             restore = false;
@@ -819,7 +819,7 @@ long gui_wps_show(void)
 
         switch(button)
         {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             case ACTION_WPS_TOGGLE_LIKE:
                 if (state->id3 && home_toggle_like(state->id3->path) < 0)
                     splash(HZ * 2, ID2P(LANG_HOME_LIKE_FAILED));
@@ -1132,7 +1132,7 @@ struct wps_state *get_wps_state(void)
 /* this is called from the playback thread so NO DRAWING! */
 static void track_info_callback(unsigned short id, void *param)
 {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (id == PLAYBACK_EVENT_TRACK_CHANGE) home_liked_invalidate();
 #endif
     struct wps_state *state = get_wps_state();

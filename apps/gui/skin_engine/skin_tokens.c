@@ -72,7 +72,7 @@
 #include "list.h"
 #include "option_select.h"
 #include "wps.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
 #include "home_autoplay.h"
 #endif
@@ -414,7 +414,7 @@ const char *get_id3_token(struct wps_token *token, struct mp3entry *id3,
         switch (token->type)
         {
             case SKIN_TOKEN_METADATA_ARTIST:
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
                 return home_artist_label(id3->artist, buf, buf_size);
 #else
                 return id3->artist;
@@ -1155,7 +1155,7 @@ static const char* get_qs_token_value(struct wps_token *token, char *buf, int bu
             return NULL;
     }
     const struct settings_list *qs_setting = global_settings.qs_items[item];
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (item == QUICKSCREEN_LEFT &&
         home_autoplay_active())
     {
@@ -1391,19 +1391,19 @@ const char *get_token_value(struct gui_wps *gwps,
             goto gtv_ret_numeric_tag_info;
         }
         case SKIN_TOKEN_HOME_LIKED:
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             return state->id3 && home_liked_state(state->id3->path) > 0 ? "l" : NULL;
 #else
             return NULL;
 #endif
         case SKIN_TOKEN_HOME_AUTOPLAY:
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             return home_autoplay_active() ? "a" : NULL;
 #else
             return NULL;
 #endif
         case SKIN_TOKEN_HOME_GENRE_PENDING:
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             return home_autoplay_pending_genre();
 #else
             return NULL;

@@ -108,7 +108,7 @@
 #include "plugin.h" /* To borrow a temp buffer to rewrite a .m3u8 file */
 #include "iap-usb.h"
 #include "logdiskf.h"
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_autoplay.h"
 #endif
 #ifdef HAVE_DIRCACHE
@@ -611,7 +611,7 @@ ssize_t playlist_format_track_path(char *dest, char *src, int buf_length,
 static void new_playlist_unlocked(struct playlist_info* playlist,
                                   const char *dir, const char *file)
 {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (playlist == &current_playlist) home_autoplay_cancel_genre();
 #endif
     empty_playlist_unlocked(playlist, false);
@@ -2146,7 +2146,7 @@ int playlist_create(const char *dir, const char *file)
 bool playlist_check(int steps)
 {
     struct playlist_info* playlist = &current_playlist;
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (steps > 0 && home_autoplay_pending_genre())
         return home_autoplay_peek_genre(steps, NULL, 0) != NULL;
 #endif
@@ -2758,7 +2758,7 @@ int playlist_set_single_track(void)
     return result;
 }
 
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 bool playlist_home_change_genre(void)
 {
     struct playlist_info *playlist = &current_playlist;
@@ -2991,7 +2991,7 @@ int playlist_next(int steps)
     playlist_write_lock(playlist);
 
     int index;
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (steps > 0 && home_autoplay_pending_genre())
     {
         index = home_autoplay_commit_genre(steps);
@@ -3036,7 +3036,7 @@ int playlist_next(int steps)
     if (index < 0)
     {
         /* end of playlist... or is it */
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
         if (playlist->flags & PLAYLIST_FLAG_HOME_AUTOPLAY)
         {
             if (steps > 0)
@@ -3118,7 +3118,7 @@ bool playlist_next_dir(int direction)
    NULL is used to identify end of playlist */
 const char* playlist_peek(int steps, char* buf, size_t buf_size)
 {
-#ifdef SANSA_CLIP
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     if (steps > 0 && home_autoplay_pending_genre())
         return home_autoplay_peek_genre(steps, buf, buf_size);
 #endif
