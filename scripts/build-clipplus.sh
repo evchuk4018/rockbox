@@ -5,12 +5,16 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 jobs="${1:-2}"
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid job count.' >&2; exit 2; }
-command -v arm-elf-eabi-gcc >/dev/null
+command -v "${ROCKBOX_COMPILER_PREFIX:-arm-elf-eabi-}gcc" >/dev/null
+options=(--target=sansaclipplus --type=n --no-ccache)
+if [[ -n "${ROCKBOX_COMPILER_PREFIX:-}" ]]; then
+    options+=(--compiler-prefix="$ROCKBOX_COMPILER_PREFIX")
+fi
 mkdir -p "$root/build-sansaclipplus"
 cd "$root/build-sansaclipplus"
-"$root/tools/configure" --target=sansaclipplus --type=n --no-ccache
+"$root/tools/configure" "${options[@]}"
 make -j"$jobs"
-make zip
+make -j"$jobs" zip
 grep -qx 'Target: sansaclipplus' rockbox-info.txt
 test -s rockbox.sansa
 test -s rockbox.zip

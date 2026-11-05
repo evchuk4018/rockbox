@@ -1,0 +1,6 @@
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc-arm-none-eabi perl git zip python3 \
+    && rm -rf /var/lib/apt/lists/*
+ENV ROCKBOX_COMPILER_PREFIX=arm-none-eabi-
+WORKDIR /work

@@ -59,11 +59,20 @@ The Windows `rockboxui.exe` is only a simulator. For the physical **Clip+**, run
 `bash scripts/build-clipplus.sh 2` in a Linux environment with the Rockbox
 `arm-elf-eabi` toolchain. It configures target `sansaclipplus`, builds matching
 firmware, codecs and plugins, and writes `build-sansaclipplus/rockbox.zip`.
-Rockbox documents the prebuilt `built1n/rbclient` Docker image in
-`tools/docker_rbclient/README`; it can run this helper with the source mounted
-at `/work` and `/work` as the working directory. The homelab is available through
-`ssh evanh@homelab` when a Linux build host is needed. Limit builds to two jobs
-on the shared server.
+Alternatively, the included Dockerfile provides Debian's ARM compiler and sets
+`ROCKBOX_COMPILER_PREFIX=arm-none-eabi-` for the same helper. From a Linux checkout:
+
+```bash
+docker build -t rockbox-clipplus -f scripts/Dockerfile.clipplus scripts
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" rockbox-clipplus \
+    bash scripts/build-clipplus.sh 2
+```
+
+This compiler differs from upstream's recommended GCC 9.5.0, so configure prints
+a toolchain warning. The prebuilt `built1n/rbclient` image mentioned in upstream
+documentation contains GCC 4.4.4 and cannot build this source. The homelab is
+available through `ssh evanh@homelab` when a Linux build host is needed. Limit
+builds to two jobs on the shared server.
 
 Check the player's `version.sdk` and `.rockbox/rockbox-info.txt` before choosing
 a target. A Clip, Clip v2, and Clip+ require different firmware. On the connected
