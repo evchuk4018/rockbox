@@ -10,6 +10,46 @@
 #include "misc.h"
 #include "string-extra.h"
 
+/* Display comma-separated artist credits once, without changing stored tags.
+ * Fall back to the original credit if the complete result would not fit. */
+const char *home_artist_label(const char *artist, char *buf, size_t size)
+{
+    if (!artist || !size) return artist;
+    const char *part = artist;
+    size_t used = 0;
+    while (*part)
+    {
+        const char *end = strchr(part, ',');
+        if (!end) end = part + strlen(part);
+        const char *start = part, *trim = end;
+        while (start < trim && (*start == ' ' || *start == '\t')) start++;
+        while (trim > start && (trim[-1] == ' ' || trim[-1] == '\t')) trim--;
+        size_t length = trim - start;
+        bool duplicate = false;
+        for (const char *previous = artist; previous < part; )
+        {
+            const char *stop = strchr(previous, ',');
+            if (!stop) break;
+            const char *last = stop;
+            while (previous < last && (*previous == ' ' || *previous == '\t')) previous++;
+            while (last > previous && (last[-1] == ' ' || last[-1] == '\t')) last--;
+            if ((size_t)(last - previous) == length &&
+                !strncasecmp(previous, start, length)) duplicate = true;
+            previous = stop + 1;
+        }
+        if (length && !duplicate)
+        {
+            if (used + (used ? 2 : 0) + length >= size) return artist;
+            if (used) { buf[used++] = ','; buf[used++] = ' '; }
+            memcpy(buf + used, start, length);
+            used += length;
+        }
+        part = *end ? end + 1 : end;
+    }
+    buf[used] = 0;
+    return used ? buf : artist;
+}
+
 bool home_in_settings;
 int home_selection;
 

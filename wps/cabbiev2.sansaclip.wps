@@ -4,28 +4,27 @@
 %xl(D,shuffle-128x64x1.bmp,0,1)
 %xl(F,playmode-128x64x1.bmp,0,0,5)
 %xl(H,heart-clip.bmp,0,0,2)
-# Album, title, artist; first two lines use the yellow display area.
-%V(0,0,128,24,1)
-%ac%s%?id<%id|%?d(1)<%d(1)|%(root%)>>
+# One song title in yellow, then artist and upcoming song in blue.
+%V(0,4,128,8,1)
 %ac%s%?it<%it|%fn>
+%V(0,18,128,8,1)
 %ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
-# Upcoming song
-%V(0,28,128,8,1)
+%V(0,30,128,8,1)
 %ac%s%Sx(Next:) %?It<%It|%Fn>
-# Battery, shuffle/change genre, and playback status
-%V(3,40,23,8,1)
-%?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
-%V(58,40,26,8,1)
-%?hA<%xd(D)|%?ps<%xd(D)>>
-%V(84,40,8,8,1)
-%?hG<*>
-%V(115,40,13,8,1)
-%?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
-# Bottom progress and countdown/heart footer, in the blue display area
-%V(0,50,128,6,1)
+# Progress above the entire footer.
+%V(0,46,128,6,1)
 %x(a,pbbackground-128x64x1.bmp,1,0)
 %pb(2,1,123,4,pb-128x64x1.bmp)
-%V(2,56,108,8,1)
+# Countdown, battery, shuffle/change genre, playback state, and heart.
+%V(0,56,48,8,1)
 -%pr
+%V(50,56,16,8,1)
+%?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
+%V(73,56,18,8,1)
+%?hA<%xd(D)|%?ps<%xd(D)>>
+%V(92,56,6,8,1)
+%?hG<*>
+%V(103,56,10,8,1)
+%?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
 %V(117,56,9,8,1)
 %?hL<%xd(Hb)|%xd(Ha)>

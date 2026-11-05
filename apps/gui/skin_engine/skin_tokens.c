@@ -414,7 +414,11 @@ const char *get_id3_token(struct wps_token *token, struct mp3entry *id3,
         switch (token->type)
         {
             case SKIN_TOKEN_METADATA_ARTIST:
+#ifdef SANSA_CLIP
+                return home_artist_label(id3->artist, buf, buf_size);
+#else
                 return id3->artist;
+#endif
             case SKIN_TOKEN_METADATA_COMPOSER:
                 return id3->composer;
             case SKIN_TOKEN_METADATA_ALBUM:

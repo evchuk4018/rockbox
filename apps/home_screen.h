@@ -30,6 +30,7 @@ struct home_picks {
     bool initialized;
 };
 
+const char *home_artist_label(const char *artist, char *buf, size_t size);
 void home_sample_begin(struct home_picks *picks, uint32_t seed);
 void home_sample_add(struct home_picks *picks, const char *path,
                      const char *title, const char *artist, const char *genre);

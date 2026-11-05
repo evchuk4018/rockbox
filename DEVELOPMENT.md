@@ -113,8 +113,9 @@ After building and seeding, the user should check the following with `run.ps1`:
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
 11. Check the Clip Cabbie layout: metadata and Next text scroll, the three retained
-    status indicators sit above the bottom progress bar, and countdown/heart sit
-    underneath in blue. The old counter and lock/volume/repeat indicators should
+    status indicators, countdown, and heart all sit below the progress bar in blue.
+    Confirm a single with identical album/title tags shows its title once and
+    repeated artist credits are displayed once. The old counter and lock/volume/repeat indicators should
     be absent. Check a long song, seeking, pausing, and the end of a track.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
     Change Genre shows its target, the asterisk appears, and Next previews a song

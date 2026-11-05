@@ -946,6 +946,16 @@ int main(void)
 {
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
     _set_error_mode(_OUT_TO_STDERR);
+    char artists[128];
+    assert(!strcmp(home_artist_label("A5omic, Tom Ryan, Tom Ryan", artists, sizeof(artists)),
+                   "A5omic, Tom Ryan"));
+    assert(!strcmp(home_artist_label("Beyoncé, A5omic, Beyoncé", artists, sizeof(artists)),
+                   "Beyoncé, A5omic"));
+    assert(!strcmp(home_artist_label("A, B, a ", artists, sizeof(artists)), "A, B"));
+    assert(!strcmp(home_artist_label("Tyler, The Creator", artists, sizeof(artists)), "Tyler, The Creator"));
+    const char *long_credit = "First Artist, Second Artist";
+    assert(home_artist_label(long_credit, artists, 4) == long_credit);
+    assert(home_artist_label(NULL, artists, sizeof(artists)) == NULL);
     test_sampling_and_refresh();
     test_pins();
     test_playback();

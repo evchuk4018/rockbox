@@ -119,8 +119,10 @@ playlist is created on the first like if absent; prepared relative paths and
 Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
+Now Playing shows the song title once, followed by artist and Next. Repeated
+comma-separated artist credits are displayed once without changing the music tags.
 The progress bar is now near the bottom. The countdown underneath, such as
-**-2:34**, shows remaining song time. The row above contains **battery/charging**,
+**-2:34**, shows remaining song time. The same footer row contains **battery/charging**,
 **shuffle/change genre**, and **playback state** (playing, paused, stopped, or
 seeking). The previous lock, volume, and repeat icons and track counter are
 removed from Now Playing. These icons display status; use the physical buttons

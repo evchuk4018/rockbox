@@ -77,6 +77,26 @@ int main(int argc, char **argv) {
                             "-o", str(executable)], check=True)
             subprocess.run([str(executable), str(ROOT / "wps/cabbiev2.sansaclip.wps")], check=True)
 
+    def test_clip_footer_layout(self):
+        import re
+        skin = (ROOT / "wps/cabbiev2.sansaclip.wps").read_text(encoding="utf-8")
+        viewports = []
+        for block in skin.split("%V(")[1:]:
+            coordinates, content = block.split(")", 1)
+            x, y, width, height, _ = map(int, coordinates.split(","))
+            self.assertLessEqual(x + width, 128)
+            self.assertLessEqual(y + height, 64)
+            viewports.append((x, y, width, height, content))
+        progress = next(v for v in viewports if "%pb(" in v[4])
+        for viewport in viewports:
+            if any(token in viewport[4] for token in ("%pr", "%xd(B", "%xd(D", "%xd(F", "%xd(H", "%?hG")):
+                self.assertGreaterEqual(viewport[1], progress[1] + progress[3])
+        footer = sorted((v for v in viewports if v[1] >= progress[1] + progress[3]), key=lambda v: v[0])
+        for left, right in zip(footer, footer[1:]):
+            self.assertLessEqual(left[0] + left[2], right[0])
+        self.assertEqual(len(re.findall(r"%it(?![A-Za-z])", skin)), 1)
+        self.assertNotIn("%id", skin)  # Singles often have identical album/title tags.
+
     def test_clip_button_events(self):
         import re
         keymap = (ROOT / "apps/keymaps/keymap-clip.c").read_text(encoding="utf-8")
