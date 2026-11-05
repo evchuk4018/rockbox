@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "home_autoplay.h"
+#include "home_screen.h"
 #include "appevents.h"
 #include "audio.h"
 #include "core_alloc.h"
@@ -26,6 +28,8 @@ struct ranked_track { uint64_t rank; off_t offset; };
 #define OFFSET_COMMENT "#HOME-OFFSET:"
 static char listening_path[MAX_PATH];
 static bool learning, finished, progress_failed;
+static const char *pending_queue;
+static char pending_genre[MAX_PATH];
 
 static bool mark_played(const char *path);
 
@@ -57,6 +61,7 @@ static void listening_event(unsigned short event, void *data)
 
 void home_autoplay_init(void)
 {
+    home_autoplay_cancel_genre();
     progress_failed = false;
     home_scores_reload();
     add_event(PLAYBACK_EVENT_TRACK_CHANGE, listening_event);
@@ -301,7 +306,7 @@ static bool publish_pool(int fd, const char *temp, int slot, bool ok)
     return false;
 }
 
-const char *home_autoplay_prepare(const char *path)
+static const char *prepare_queue(const char *path, bool stop)
 {
     static struct mp3entry id3;
     static struct tagcache_search search;
@@ -327,7 +332,7 @@ const char *home_autoplay_prepare(const char *path)
     /* Stop only after the database and seed are validated. This also finishes
      * the old listening record before ranking, and serializes queue writers
      * with the audio thread's end-of-pass transition. */
-    audio_stop();
+    if (stop) audio_stop();
     int slot = inactive_pool();
     const char *temp = ROCKBOX_DIR "/home-autoplay-source.tmp";
     int fd = slot > 0 ? open(temp, O_WRONLY | O_CREAT | O_TRUNC, 0666) : -1;
@@ -342,9 +347,109 @@ const char *home_autoplay_prepare(const char *path)
     }
     tagcache_search_finish(&search);
     const char *result = publish_pool(fd, temp, slot, ok) ? write_order(slot, path, NULL) : NULL;
-    if (result) progress_failed = false;
+    if (result && stop) progress_failed = false;
     if (!result) splash(HZ * 2, ID2P(LANG_FAILED));
     return result;
+}
+
+const char *home_autoplay_prepare(const char *path)
+{
+    return prepare_queue(path, true);
+}
+
+struct genre_pick {
+    char exclude[MAX_PATH], path[MAX_PATH], genre[MAX_PATH];
+    uint32_t seed, now;
+    uint64_t rank;
+};
+
+static bool pick_genre(const char *path, void *context)
+{
+    static struct mp3entry id3;
+    struct genre_pick *pick = context;
+    if (!get_metadata(&id3, -1, path) || !id3.genre_string ||
+        !id3.genre_string[0] || strlen(id3.genre_string) >= MAX_PATH ||
+        !strcasecmp(id3.genre_string, pick->exclude))
+        return true;
+    uint64_t rank = home_weighted_rank(path, pick->seed, home_score_get(path, pick->now));
+    if (rank < pick->rank)
+    {
+        pick->rank = rank;
+        strlcpy(pick->path, path, sizeof(pick->path));
+        strlcpy(pick->genre, id3.genre_string, sizeof(pick->genre));
+    }
+    return true;
+}
+
+bool home_autoplay_active(void)
+{
+    return (audio_status() & AUDIO_STATUS_PLAY) &&
+        (playlist_get_current()->flags & PLAYLIST_FLAG_HOME_AUTOPLAY);
+}
+
+bool home_autoplay_request_genre(void)
+{
+    if (pending_queue) return true;
+    if (!home_autoplay_active()) return false;
+    const struct mp3entry *current = audio_current_track();
+    struct genre_pick pick = {.seed = ((uint32_t)rand() << 16) ^ rand(),
+                              .now = home_score_time(), .rank = UINT64_MAX};
+    if (!current || !current->genre_string) return false;
+    strlcpy(pick.exclude, current->genre_string, sizeof(pick.exclude));
+    if (!home_liked_foreach(pick_genre, &pick) || !pick.path[0])
+    {
+        splash(HZ * 2, ID2P(LANG_HOME_NO_OTHER_GENRE));
+        return false;
+    }
+    const char *queue = prepare_queue(pick.path, false);
+    if (!queue) return false;
+    strlcpy(pending_genre, pick.genre, sizeof(pending_genre));
+    pending_queue = queue; /* Publish only the complete pool and queue. */
+    return true;
+}
+
+const char *home_autoplay_pending_genre(void)
+{
+    return pending_queue ? pending_genre : NULL;
+}
+
+void home_autoplay_cancel_genre(void)
+{
+    pending_queue = NULL;
+}
+
+const char *home_autoplay_peek_genre(int steps, char *buf, size_t size)
+{
+    const char *queue = pending_queue;
+    if (!queue || steps <= 0) return NULL;
+    int fd = open(queue, O_RDONLY);
+    if (fd < 0) return NULL;
+    char path[MAX_PATH];
+    const char *result = NULL;
+    while (read_line(fd, path, sizeof(path)) > 0)
+        if (path[0] == '/' && --steps == 0)
+        {
+            if (buf && size) strlcpy(buf, path, size);
+            result = buf && size ? buf : "";
+            break;
+        }
+    close(fd);
+    return result;
+}
+
+int home_autoplay_commit_genre(int steps)
+{
+    const char *queue = pending_queue;
+    if (!queue || !home_autoplay_peek_genre(steps, NULL, 0)) return -1;
+    /* playlist_create cancels the pending request, so keep the filename local. */
+    if (playlist_create(ROCKBOX_DIR, strrchr(queue, '/') + 1) < 0 ||
+        playlist_set_home_autoplay() < 0)
+        return -1;
+    home_autoplay_cancel_genre();
+    playlist_get_current()->index = steps - 1;
+    playlist_get_current()->started = true;
+    progress_failed = false;
+    return steps - 1;
 }
 
 int home_autoplay_next_round(void)

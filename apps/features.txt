@@ -4,6 +4,10 @@
    version numbers should be updated. It also means that changing defines in
    the various config*.h files could also break back compatibility */
 
+#ifdef SANSA_CLIP
+clip_home
+#endif
+
 #if defined(HAVE_ACCESSORY_SUPPLY)
 accessory_supply
 #endif

@@ -17369,3 +17369,59 @@
     *: "Could not save listening scores"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_HOME_CHANGE_GENRE
+  desc: Clip Home autoplay quickscreen action
+  user: core
+  <source>
+    *: "Change Genre"
+  </source>
+  <dest>
+    *: "Change Genre"
+  </dest>
+  <voice>
+    *: "Change Genre"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_HOME_AFTER_SONG
+  desc: Clip genre change timing
+  user: core
+  <source>
+    *: "After this song"
+  </source>
+  <dest>
+    *: "After this song"
+  </dest>
+  <voice>
+    *: "After this song"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_HOME_NO_OTHER_GENRE
+  desc: Clip genre change has no eligible seed
+  user: core
+  <source>
+    *: "No other liked genre available"
+  </source>
+  <dest>
+    *: "No other liked genre available"
+  </dest>
+  <voice>
+    *: "No other liked genre available"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_HOME_LIKE_FAILED
+  desc: Clip liked playlist write failed
+  user: core
+  <source>
+    *: "Could not save Liked Songs"
+  </source>
+  <dest>
+    *: "Could not save Liked Songs"
+  </dest>
+  <voice>
+    *: "Could not save Liked Songs"
+  </voice>
+</phrase>

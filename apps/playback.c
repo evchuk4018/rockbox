@@ -20,6 +20,9 @@
  *
  ****************************************************************************/
 #include "config.h"
+#ifdef SANSA_CLIP
+#include "home_autoplay.h"
+#endif
 #include "system.h"
 #include "version.h"
 #include "kernel.h"
@@ -3168,6 +3171,7 @@ static void audio_stop_playback(void)
 
 #ifdef SANSA_CLIP
     /* An explicit stop isn't a natural finish, even after an auto transition. */
+    home_autoplay_cancel_genre();
     if (filling != STATE_ENDED)
         track_event_flags &= ~TEF_AUTO_SKIP;
 #endif

@@ -9,7 +9,7 @@ shared Rockbox C code with original Clip display and button configuration.
 | Area | Files |
 | --- | --- |
 | Main menu and navigation | `apps/root_menu.c`, `apps/menu.c`, `apps/menu.h` |
-| Clip Home, suggestions, and pins | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_screen.h` |
+| Clip Home, suggestions, and pins | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_liked.c`, `apps/home_screen.h` |
 | Genre autoplay and persistent listening scores | `apps/home_autoplay.c`, `apps/home_scores.c`, `apps/home_autoplay.h` |
 | Settings and submenus | `apps/menus/`, `apps/settings_list.c`, `apps/settings.c` |
 | Lists, status bar, and layout | `apps/gui/`, including `list.c` and `viewport.c` |
@@ -60,8 +60,10 @@ Unicode paths, refresh/navigation, pins, repeat modes, continuous autoplay,
 scoring thresholds and session ownership, duplicate finish events, decay,
 restart persistence, partial/failed writes, compaction failures, weighted
 selection, 20/20/5 batching without repeats, skipped versus unreached tracks,
-legacy queue adoption, and 850/5,000-track memory checks. The adapters supply the
-database, metadata and audio events; the checks do not drive GUI or audio playback.
+legacy queue adoption, and 850/5,000-track memory checks. They also cover playlist-backed likes, relative/Unicode/case-sensitive paths,
+duplicate removal and save failures, short/long button events for Clip and Clip+,
+and deferred genre changes through production playlist look-ahead and progression.
+The adapters supply the database, metadata and audio events; the checks do not drive GUI or audio playback.
 
 The existing regression checks run in the MSYS2 UCRT64 environment:
 
@@ -105,6 +107,38 @@ After building and seeding, the user should check the following with `run.ps1`:
    database after changing the library and confirm the scores persist. New
    sessions use the updated library; an existing session keeps its genre pool
    until you start a new one.
+
+10. In Now Playing, tap Space twice to pause/resume. Tap Up to toggle the heart,
+    then re-enter the screen/restart to check persistence. Hold Up for pitch and
+    hold Space for the context menu; releasing either must not toggle a like or
+    pause. Confirm list Up/Space navigation still works.
+11. Check the Clip Cabbie layout: metadata and Next text scroll, the three retained
+    status indicators sit above the bottom progress bar, and countdown/heart sit
+    underneath in blue. The old counter and lock/volume/repeat indicators should
+    be absent. Check a long song, seeking, pausing, and the end of a track.
+12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
+    Change Genre shows its target, the asterisk appears, and Next previews a song
+    from that genre. Let the current song finish: it must not restart or briefly
+    play an old-genre successor. Repeat using manual Next. Pause/seek should keep
+    the request; Stop, backward navigation, another playlist and restart should
+    clear it. Try a liked playlist with one genre and check the explanatory message.
+    Check ordinary-playlist shuffle still toggles with the same shortcut.
+
+Likes use a bounded streaming reader and the same path resolver as Rockbox M3U
+playback, with exact case-sensitive identity. Writes use a synced temporary file
+and replacement rename; failure preserves the previous playlist and displayed
+membership. Membership is cached per displayed track, invalidated on track change
+or WPS re-entry. A revision counter invalidates Home suggestions on the next visit.
+The Clip-only skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
+(pending genre). `clip_home` selects the Clip Cabbie variant during packaging.
+
+Change Genre prepares the inactive pool/queue under the playlist lock without
+stopping audio. Pending positive peeks/checks see that queue; forward progression
+adopts it before announcing the new track. Flushing buffered successors preserves
+the playing track and updates Next metadata. Stop and playlist replacement clear
+the volatile request; no extra persistent pending-request file is needed. Old-track
+finish scoring remains attached to its original play. A queued genre starts a fresh
+used-song cycle, then uses the existing 20-song batching and persistence.
 
 The Home sources and integration are compiled only for `SANSA_CLIP`; they share
 the simulator and device code path. `home_play_suggestion(path)` validates the

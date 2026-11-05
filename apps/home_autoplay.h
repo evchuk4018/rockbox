@@ -3,6 +3,7 @@
 #define HOME_AUTOPLAY_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "rbpaths.h"
 
@@ -27,5 +28,13 @@ void home_autoplay_init(void);
 const char *home_autoplay_prepare(const char *path);
 /* Called at the existing end-of-playlist transition, with the playlist locked. */
 int home_autoplay_next_round(void);
+/* Request runs with the current playlist locked; it never stops audio. */
+bool home_autoplay_active(void);
+bool home_autoplay_request_genre(void);
+const char *home_autoplay_pending_genre(void);
+void home_autoplay_cancel_genre(void);
+const char *home_autoplay_peek_genre(int steps, char *buf, size_t size);
+/* Commit a pending queue on forward progression, with the playlist locked. */
+int home_autoplay_commit_genre(int steps);
 
 #endif

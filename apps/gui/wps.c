@@ -21,6 +21,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include "config.h"
+#ifdef SANSA_CLIP
+#include "home_screen.h"
+#endif
 
 #include "system.h"
 #include "file.h"
@@ -754,6 +757,9 @@ long gui_wps_show(void)
 
         if (restore)
         {
+#ifdef SANSA_CLIP
+            home_liked_invalidate();
+#endif
             restore = false;
 #if defined(HAVE_LCD_ENABLE) || defined(HAVE_LCD_SLEEP)
             add_event(LCD_EVENT_ACTIVATION, wps_lcd_activation_hook);
@@ -813,6 +819,14 @@ long gui_wps_show(void)
 
         switch(button)
         {
+#ifdef SANSA_CLIP
+            case ACTION_WPS_TOGGLE_LIKE:
+                if (state->id3 && home_toggle_like(state->id3->path) < 0)
+                    splash(HZ * 2, ID2P(LANG_HOME_LIKE_FAILED));
+                skin_request_full_update(WPS);
+                update = true;
+                break;
+#endif
 #ifdef HAVE_HOTKEY
             case ACTION_WPS_HOTKEY:
             {
@@ -1118,6 +1132,9 @@ struct wps_state *get_wps_state(void)
 /* this is called from the playback thread so NO DRAWING! */
 static void track_info_callback(unsigned short id, void *param)
 {
+#ifdef SANSA_CLIP
+    if (id == PLAYBACK_EVENT_TRACK_CHANGE) home_liked_invalidate();
+#endif
     struct wps_state *state = get_wps_state();
 
     if (id == PLAYBACK_EVENT_TRACK_CHANGE || id == PLAYBACK_EVENT_CUR_TRACK_READY)

@@ -112,6 +112,7 @@ wps.132x80x(16|24|32):   cabbiev2.132x80x16.wps
 wps.128x96x(16|24|32):   cabbiev2.128x96x16.wps
 wps.128x96x2:         cabbiev2.128x96x2.wps
 wps.128x64x1:         cabbiev2.128x64x1.wps
+wps.128x64x1&clip_home: cabbiev2.sansaclip.wps
 wps.112x64x1:         cabbiev2.112x64x1.wps
 wps.96x96x(16|24|32):    cabbiev2.96x96x16.wps
 

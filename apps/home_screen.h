@@ -38,6 +38,12 @@ bool home_manual_refresh(int action, int selected);
 int home_pins_load(char pins[HOME_MAX_PINS][MAX_PATH]);
 bool home_playlist_is_pinned(const char *path);
 int home_toggle_pin(const char *path);
+/* -1 on storage failure, otherwise 0 (unliked) or 1 (liked). */
+int home_liked_state(const char *path);
+int home_toggle_like(const char *path);
+void home_liked_invalidate(void);
+unsigned int home_liked_revision(void);
+bool home_liked_foreach(bool (*visit)(const char *, void *), void *context);
 
 /* Back keeps the legacy menu as the parent; an explicit Home action clears it. */
 extern bool home_in_settings;

@@ -170,6 +170,12 @@ int playlist_insert_playlist(struct playlist_info* playlist, const char *filenam
 bool playlist_entries_iterate(const char *filename,
                               struct playlist_insert_context *pl_context,
                               bool (*action_cb)(const char *file_name));
+/* Shared M3U path rules; src is normalized in place. */
+ssize_t playlist_format_track_path(char *dest, char *src, int buf_length,
+                                  const char *dir, size_t dir_length);
+#ifdef SANSA_CLIP
+bool playlist_home_change_genre(void);
+#endif
 void playlist_skip_entry(struct playlist_info *playlist, int steps);
 int playlist_delete(struct playlist_info* playlist, int index);
 int playlist_move(struct playlist_info* playlist, int index, int new_index);

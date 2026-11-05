@@ -52,6 +52,7 @@ plugin.c
 root_menu.c
 #ifdef SANSA_CLIP
 home_data.c
+home_liked.c
 home_screen.c
 home_scores.c
 home_autoplay.c

@@ -379,6 +379,7 @@ enum {
     ACTION_USB_HID_MOUSE_WHEEL_SCROLL_DOWN,
     ACTION_USB_HID_LAST, /* Place holder */
 
+    ACTION_WPS_TOGGLE_LIKE,
     LAST_ACTION_PLACEHOLDER, /* custom actions should be this + something */
 };
 

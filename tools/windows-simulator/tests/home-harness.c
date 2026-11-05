@@ -2,6 +2,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
+#include <direct.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -17,17 +19,25 @@
 #include "timefuncs.h"
 #include "kernel.h"
 #include "action.h"
+#include "pathfuncs.h"
+#define DEBUGF(...) ((void)0)
+#define logf(...) ((void)0)
+#define BOM_UTF_8_SIZE 3
+#define BOM_UTF_8 "\xef\xbb\xbf"
 #undef write
 #undef open
 #undef fsync
 #undef rename
 #undef ftruncate
 
+static const char *disk_path(const char *path)
+{ return !strncmp(path, "/Playlists", 10) ? path + 1 : path; }
+int test_mkdir(const char *path) { return _mkdir(disk_path(path)); }
 static int fail_write, fail_sync, fail_rename, rename_failure_countdown;
 static bool short_write;
 int test_open(const char *path, int flags, ...)
 {
-    return _open(path, flags | O_BINARY, 0666);
+    return _open(disk_path(path), flags | O_BINARY, 0666);
 }
 int test_write(int fd, const void *data, size_t length)
 {
@@ -42,7 +52,7 @@ int test_sync(int fd)
 int test_rename(const char *old, const char *new)
 {
     if (rename_failure_countdown > 0 && --rename_failure_countdown == 0) return -1;
-    return !fail_rename && MoveFileExA(old, new, MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
+    return !fail_rename && MoveFileExA(disk_path(old), disk_path(new), MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
 }
 int test_truncate(int fd, off_t length) { return _chsize(fd, length); }
 size_t strlcpy(char *dest, const char *src, size_t size)
@@ -141,7 +151,7 @@ bool file_exists(const char *path)
     }
     for (unsigned i = 0; i < sizeof(library) / sizeof(*library); i++)
         if (!strcmp(path, library[i].path)) return library[i].exists;
-    return _access(path, 0) == 0;
+    return _access(disk_path(path), 0) == 0;
 }
 bool get_metadata(struct mp3entry *id3, int fd, const char *path)
 {
@@ -198,7 +208,13 @@ static void emit(unsigned short event, struct mp3entry *id3, unsigned flags)
     callbacks[event](event, &te);
 }
 static int audio_stop_count;
-void audio_stop(void) { audio_stop_count++; }
+static bool playback_running;
+int audio_status(void) { return playback_running ? AUDIO_STATUS_PLAY : 0; }
+void audio_stop(void) { audio_stop_count++; playback_running = false; home_autoplay_cancel_genre(); }
+static int flush_count;
+void audio_flush_and_reload_tracks(void) { flush_count++; }
+static struct mp3entry playing_id3;
+struct mp3entry *audio_current_track(void) { return &playing_id3; }
 static char queue_paths[1024][MAX_PATH];
 struct playlist_info *playlist_get_current(void) { return &current_playlist; }
 char *playlist_get_name(const struct playlist_info *p, char *out, int size)
@@ -211,6 +227,7 @@ int playlist_get_track_info(struct playlist_info *p, int index, struct playlist_
 }
 int playlist_create(const char *dir, const char *name)
 {
+    home_autoplay_cancel_genre();
     current_playlist = (struct playlist_info){.indices = indices, .control_fd = -1};
     snprintf(current_playlist.filename, sizeof(current_playlist.filename), "%s/%s", dir, name);
     int fd = test_open(current_playlist.filename, O_RDONLY);
@@ -222,6 +239,14 @@ int playlist_create(const char *dir, const char *name)
     return 0;
 }
 
+static int get_track_filename(struct playlist_info *p, int index, char *out, int size)
+{
+    (void)p;
+    if (index < 0 || index >= current_playlist.amount) return -1;
+    strlcpy(out, queue_paths[index], size);
+    return 0;
+}
+
 /* PRODUCTION_FUNCTIONS */
 
 static void start_track(int index)
@@ -229,6 +254,8 @@ static void start_track(int index)
     struct mp3entry id3;
     current_playlist.index = index;
     assert(get_metadata(&id3, -1, queue_paths[index]));
+    playback_running = true;
+    playing_id3 = id3;
     emit(PLAYBACK_EVENT_TRACK_CHANGE, &id3, TEF_CURRENT);
 }
 
@@ -476,6 +503,7 @@ static void test_autoplay(void)
 {
     home_autoplay_init();
     global_settings.max_files_in_playlist = 16;
+    home_autoplay_cancel_genre();
     current_playlist = (struct playlist_info){.indices = indices};
     strcpy(current_playlist.filename, "/Playlists/Previous.m3u8");
     database_usable = false;
@@ -800,6 +828,120 @@ static void test_library_sized_memory(void)
     assert(largest_request <= 320);
 }
 
+static void write_likes(const char *contents)
+{
+    _mkdir("Playlists");
+    FILE *f = fopen("Playlists/Liked Songs.m3u8", "wb");
+    assert(f && fwrite(contents, 1, strlen(contents), f) == strlen(contents));
+    assert(!fclose(f));
+    home_liked_invalidate();
+}
+
+static void test_likes(void)
+{
+    remove("Playlists/Liked Songs.m3u8");
+    _rmdir("Playlists");
+    home_liked_invalidate();
+    assert(home_liked_state(library[0].path) == 0);
+    unsigned int before = home_liked_revision();
+    assert(home_toggle_like(library[0].path) == 1);
+    assert(home_liked_revision() == before + 1);
+    assert(home_liked_state(library[0].path) == 1);
+    home_liked_invalidate();
+    assert(home_liked_state(library[0].path) == 1);
+    assert(home_toggle_like("/Music/./seed.mp3") == 0);
+    write_likes("\xef\xbb\xbf#EXTM3U\r\n../Music/seed.mp3\r\n/Music/seed.mp3\n../Music/歌曲 troisième.mp3\n/Music/SEED.mp3\n");
+    assert(home_liked_state(library[0].path) == 1);
+    assert(home_toggle_like(library[0].path) == 0);
+    assert(home_liked_state("/Music/SEED.mp3") == 1);
+    assert(home_liked_state(library[4].path) == 1);
+    home_liked_invalidate();
+    assert(home_liked_state(library[0].path) == 0); /* all duplicates removed */
+    for (int failure = 0; failure < 4; failure++)
+    {
+        fail_write = failure == 0; short_write = failure == 1;
+        fail_sync = failure == 2; fail_rename = failure == 3;
+        assert(home_toggle_like(library[0].path) == -1);
+        fail_write = fail_sync = fail_rename = 0; short_write = false;
+        home_liked_invalidate();
+        assert(home_liked_state(library[0].path) == 0);
+        assert(home_liked_state(library[4].path) == 1);
+    }
+    assert(home_toggle_like(library[0].path) == 1);
+    assert(home_liked_state(library[0].path) == 1);
+    /* Cache refresh happens on re-entry or track change. */
+    write_likes("#EXTM3U\n/Music/rock.mp3\n");
+    assert(home_liked_state(library[0].path) == 0);
+    char invalid[MAX_PATH + 20]; memset(invalid, 'a', sizeof(invalid));
+    invalid[0] = '/'; invalid[sizeof(invalid) - 1] = 0;
+    assert(home_toggle_like(invalid) == -1);
+    assert(home_toggle_like("/Music/bad\nline.mp3") == -1);
+    char overlong[MAX_PATH + 20]; memset(overlong, 'a', sizeof(overlong));
+    overlong[sizeof(overlong)-2] = '\n'; overlong[sizeof(overlong)-1] = 0;
+    write_likes(overlong);
+    assert(home_toggle_like(library[0].path) == -1);
+    remove("Playlists/Liked Songs.m3u8");
+}
+
+static void test_genre_change(void)
+{
+    home_autoplay_init();
+    large_library_count = 0;
+    global_settings.max_files_in_playlist = 100;
+    const char *queue = home_autoplay_prepare(library[0].path);
+    assert(queue && !playlist_create(".", strrchr(queue, '/') + 1));
+    assert(!playlist_set_home_autoplay());
+    start_track(0);
+    write_likes("#EXTM3U\n/Music/seed.mp3\n/Music/rock.mp3\n");
+    int stopped = audio_stop_count, flushed = flush_count;
+    assert(playlist_home_change_genre());
+    assert(audio_stop_count == stopped && flush_count == flushed + 1);
+    assert(!strcmp(home_autoplay_pending_genre(), "Rock"));
+    char next[MAX_PATH];
+    assert(playlist_check(1) && playlist_peek(1, next, sizeof(next)));
+    assert(!strcmp(next, library[2].path));
+    assert(!strcmp(queue_paths[current_playlist.index], library[0].path));
+    assert(playlist_home_change_genre());
+    assert(flush_count == flushed + 1); /* held Left cannot keep rerolling/flushing */
+    playing_id3.elapsed = playing_id3.length;
+    uint32_t now = home_score_time();
+    uint32_t score = home_score_get(playing_id3.path, now);
+    emit(PLAYBACK_EVENT_TRACK_FINISH, &playing_id3, TEF_CURRENT | TEF_AUTO_SKIP);
+    assert(home_score_get(playing_id3.path, now) == score + 2 * HOME_SCORE_ONE);
+    assert(playlist_next(1) == 0);
+    assert(!home_autoplay_pending_genre());
+    assert(!strcmp(queue_paths[0], library[2].path));
+    start_track(0);
+    playing_id3.elapsed = 1000;
+    assert(playlist_home_change_genre());
+    assert(!strcmp(home_autoplay_pending_genre(), "Pop"));
+    emit(PLAYBACK_EVENT_TRACK_FINISH, &playing_id3, TEF_CURRENT);
+    assert(playlist_next(1) == 0); /* explicit Next also switches */
+    assert(!strcmp(queue_paths[0], library[0].path));
+    start_track(0);
+    assert(playlist_home_change_genre());
+    assert(playlist_next(-1) == -1 && !home_autoplay_pending_genre());
+    assert(playlist_home_change_genre());
+    audio_stop();
+    assert(!home_autoplay_pending_genre());
+    assert(!playlist_home_change_genre());
+    start_track(0);
+    assert(playlist_home_change_genre());
+    home_autoplay_init();
+    assert(!home_autoplay_pending_genre());
+    write_likes("#EXTM3U\n/Music/seed.mp3\n/Music/missing.mp3\n");
+    assert(!playlist_home_change_genre());
+    assert(!home_autoplay_pending_genre());
+    write_likes("#EXTM3U\n/Music/rock.mp3\n");
+    fail_sync = 1;
+    assert(!playlist_home_change_genre());
+    fail_sync = 0;
+    assert(!home_autoplay_pending_genre());
+    assert(!strcmp(queue_paths[current_playlist.index], library[0].path));
+    current_playlist.flags = 0;
+    assert(!playlist_home_change_genre());
+}
+
 int main(void)
 {
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
@@ -813,6 +955,8 @@ int main(void)
     test_batch_weights();
     test_batch_failures_and_missing();
     test_library_sized_memory();
+    test_likes();
+    test_genre_change();
     puts("Home sampling, pins, 20-song autoplay batches, scores, persistence, and repeat checks passed.");
     return 0;
 }

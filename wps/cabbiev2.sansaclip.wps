@@ -1,0 +1,31 @@
+# Clip song-first Cabbie variant. SPDX-License-Identifier: GPL-2.0-or-later
+%wd
+%xl(B,battery-128x64x1.bmp,0,0,9)
+%xl(D,shuffle-128x64x1.bmp,0,1)
+%xl(F,playmode-128x64x1.bmp,0,0,5)
+%xl(H,heart-clip.bmp,0,0,2)
+# Album, title, artist; first two lines use the yellow display area.
+%V(0,0,128,24,1)
+%ac%s%?id<%id|%?d(1)<%d(1)|%(root%)>>
+%ac%s%?it<%it|%fn>
+%ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
+# Upcoming song
+%V(0,28,128,8,1)
+%ac%s%Sx(Next:) %?It<%It|%Fn>
+# Battery, shuffle/change genre, and playback status
+%V(3,40,23,8,1)
+%?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
+%V(58,40,26,8,1)
+%?hA<%xd(D)|%?ps<%xd(D)>>
+%V(84,40,8,8,1)
+%?hG<*>
+%V(115,40,13,8,1)
+%?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
+# Bottom progress and countdown/heart footer, in the blue display area
+%V(0,50,128,6,1)
+%x(a,pbbackground-128x64x1.bmp,1,0)
+%pb(2,1,123,4,pb-128x64x1.bmp)
+%V(2,56,108,8,1)
+-%pr
+%V(117,56,9,8,1)
+%?hL<%xd(Hb)|%xd(Ha)>

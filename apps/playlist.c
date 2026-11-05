@@ -548,7 +548,7 @@ int update_playlist_flags_unlocked(struct playlist_info *playlist,
  *    This also applies to Windows-style relative paths "C:foo/bar" where
  *    the drive letter is accepted but ignored.
  */
-static ssize_t format_track_path(char *dest, char *src, int buf_length,
+ssize_t playlist_format_track_path(char *dest, char *src, int buf_length,
                                  const char *dir, size_t dlen)
 {
     /* Look for the end of the string (includes NULL) */
@@ -611,6 +611,9 @@ static ssize_t format_track_path(char *dest, char *src, int buf_length,
 static void new_playlist_unlocked(struct playlist_info* playlist,
                                   const char *dir, const char *file)
 {
+#ifdef SANSA_CLIP
+    if (playlist == &current_playlist) home_autoplay_cancel_genre();
+#endif
     empty_playlist_unlocked(playlist, false);
 
     /* enable dirplay for the current playlist if there's a DIR but no FILE */
@@ -1140,7 +1143,7 @@ static int get_track_filename(struct playlist_info* playlist, int index,
 
     playlist_write_unlock(playlist);
 
-    if (format_track_path(buf, tmp_buf, buf_length,
+    if (playlist_format_track_path(buf, tmp_buf, buf_length,
                           playlist->filename, playlist->dirlen) < 0)
         return -1;
 
@@ -2143,6 +2146,10 @@ int playlist_create(const char *dir, const char *file)
 bool playlist_check(int steps)
 {
     struct playlist_info* playlist = &current_playlist;
+#ifdef SANSA_CLIP
+    if (steps > 0 && home_autoplay_pending_genre())
+        return home_autoplay_peek_genre(steps, NULL, 0) != NULL;
+#endif
 
     /* always allow folder navigation */
     if (global_settings.next_folder && playlist_allow_dirplay(playlist))
@@ -2622,7 +2629,7 @@ bool playlist_entries_iterate(const char *filename,
 
             /* we need to format so that relative paths are correctly
                handled */
-            if ((max = format_track_path(trackname, temp_buf,
+            if ((max = playlist_format_track_path(trackname, temp_buf,
                                   sizeof(trackname), dir, dirlen)) < 0)
             {
                 goto out;
@@ -2752,6 +2759,19 @@ int playlist_set_single_track(void)
 }
 
 #ifdef SANSA_CLIP
+bool playlist_home_change_genre(void)
+{
+    struct playlist_info *playlist = &current_playlist;
+    dc_thread_stop(playlist);
+    playlist_write_lock(playlist);
+    bool pending = home_autoplay_pending_genre() != NULL;
+    bool result = home_autoplay_request_genre();
+    playlist_write_unlock(playlist);
+    dc_thread_start(playlist, false);
+    if (result && !pending) audio_flush_and_reload_tracks();
+    return result;
+}
+
 int playlist_set_home_autoplay(void)
 {
     struct playlist_info *playlist = &current_playlist;
@@ -2971,6 +2991,18 @@ int playlist_next(int steps)
     playlist_write_lock(playlist);
 
     int index;
+#ifdef SANSA_CLIP
+    if (steps > 0 && home_autoplay_pending_genre())
+    {
+        index = home_autoplay_commit_genre(steps);
+        goto out;
+    }
+    if (steps < 0 && home_autoplay_pending_genre())
+    {
+        home_autoplay_cancel_genre();
+        audio_flush_and_reload_tracks();
+    }
+#endif
     int repeat_mode = playlist_get_repeat_mode();
     if (repeat_mode == REPEAT_ONE)
     {
@@ -3086,6 +3118,10 @@ bool playlist_next_dir(int direction)
    NULL is used to identify end of playlist */
 const char* playlist_peek(int steps, char* buf, size_t buf_size)
 {
+#ifdef SANSA_CLIP
+    if (steps > 0 && home_autoplay_pending_genre())
+        return home_autoplay_peek_genre(steps, buf, buf_size);
+#endif
     struct playlist_info* playlist = &current_playlist;
     char *temp_ptr;
     int index = get_next_index(playlist, steps, -1);
@@ -4155,7 +4191,7 @@ int playlist_save(struct playlist_info* playlist, char *filename)
     if (!playlist)
         playlist = &current_playlist;
 
-    pathlen = format_track_path(save_path, filename,
+    pathlen = playlist_format_track_path(save_path, filename,
                                 sizeof(save_path), PATH_ROOTSTR, -1u);
     if (pathlen < 0)
         return -1;

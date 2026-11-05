@@ -72,6 +72,10 @@
 #include "list.h"
 #include "option_select.h"
 #include "wps.h"
+#ifdef SANSA_CLIP
+#include "home_screen.h"
+#include "home_autoplay.h"
+#endif
 
 #if (CONFIG_STORAGE & STORAGE_ATA)
 #include "ata.h" /* ata_disk_isssd() */
@@ -1147,6 +1151,16 @@ static const char* get_qs_token_value(struct wps_token *token, char *buf, int bu
             return NULL;
     }
     const struct settings_list *qs_setting = global_settings.qs_items[item];
+#ifdef SANSA_CLIP
+    if (item == QUICKSCREEN_LEFT &&
+        home_autoplay_active())
+    {
+        if (!data_token) return str(LANG_HOME_CHANGE_GENRE);
+        const char *genre = home_autoplay_pending_genre();
+        if (genre) return genre;
+        return str(LANG_HOME_AFTER_SONG);
+    }
+#endif
 
     if (qs_setting == NULL)
         return "ERR";
@@ -1372,6 +1386,24 @@ const char *get_token_value(struct gui_wps *gwps,
             numeric_buf = buf;
             goto gtv_ret_numeric_tag_info;
         }
+        case SKIN_TOKEN_HOME_LIKED:
+#ifdef SANSA_CLIP
+            return state->id3 && home_liked_state(state->id3->path) > 0 ? "l" : NULL;
+#else
+            return NULL;
+#endif
+        case SKIN_TOKEN_HOME_AUTOPLAY:
+#ifdef SANSA_CLIP
+            return home_autoplay_active() ? "a" : NULL;
+#else
+            return NULL;
+#endif
+        case SKIN_TOKEN_HOME_GENRE_PENDING:
+#ifdef SANSA_CLIP
+            return home_autoplay_pending_genre();
+#else
+            return NULL;
+#endif
         case SKIN_TOKEN_PLAYLIST_SHUFFLE:
             if ( global_settings.playlist_shuffle )
                 return "s";

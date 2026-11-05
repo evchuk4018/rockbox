@@ -31,6 +31,29 @@
 #include "option_select.h"
 #include "appevents.h"
 #include "statusbar-skinned.h"
+#ifdef SANSA_CLIP
+#include "home_autoplay.h"
+#include "playlist.h"
+#endif
+
+static bool genre_item(const struct settings_list *item)
+{
+#ifdef SANSA_CLIP
+    return item && item->setting == &global_settings.playlist_shuffle &&
+        home_autoplay_active();
+#else
+    (void)item;
+    return false;
+#endif
+}
+
+static const char *qs_title(const struct settings_list *item)
+{
+#ifdef SANSA_CLIP
+    if (genre_item(item)) return str(LANG_HOME_CHANGE_GENRE);
+#endif
+    return P2STR(ID2P(item->lang_id));
+}
 
  /* 2 lines each for the top, middle, and bottom section = 6 in total.
     With less space, top and bottom sections lose a line = 4 in total. */
@@ -166,7 +189,7 @@ static void quickscreen_setup_viewports(struct quickscreen *qs,
         /* Check maximum width needed for left or right text vp */
         if (!qs->items[i] || (i != QUICKSCREEN_LEFT && i != QUICKSCREEN_RIGHT))
             continue;
-        const char *str = P2STR(ID2P(qs->items[i]->lang_id));
+        const char *str = qs_title(qs->items[i]);
         width = MAX(font_getstringsize(str, NULL, NULL, parent->font), width);
     }
     /* Set text alignment */
@@ -191,9 +214,16 @@ static void quickscreen_draw_setting(const struct settings_list *item,
                                      struct screen *display, bool single_line)
 {
     char buf[MAX_PATH];
-    const char *title = P2STR(ID2P(item->lang_id));
+    const char *title = qs_title(item);
     const char *value = option_get_valuestring(item, buf, sizeof buf,
                                                option_value_as_int(item));
+#ifdef SANSA_CLIP
+    if (genre_item(item))
+    {
+        value = home_autoplay_pending_genre();
+        if (!value) value = str(LANG_HOME_AFTER_SONG);
+    }
+#endif
     if (single_line)
     {
         char text[MAX_PATH];
@@ -298,6 +328,16 @@ static void talk_qs_option(const struct settings_list *opt, bool enqueue)
 {
     if (!global_settings.talk_menu || !opt)
         return;
+#ifdef SANSA_CLIP
+    if (genre_item(opt))
+    {
+        talk_id(LANG_HOME_CHANGE_GENRE, enqueue);
+        const char *genre = home_autoplay_pending_genre();
+        if (genre) talk_spell(genre, true);
+        else talk_id(LANG_HOME_AFTER_SONG, true);
+        return;
+    }
+#endif
 
     if (enqueue)
         talk_id(opt->lang_id, enqueue);
@@ -340,6 +380,14 @@ static bool quickscreen_do_button(struct quickscreen * qs, int button,
 
     if (qs->items[*item] == NULL)
         return false;
+#ifdef SANSA_CLIP
+    if (genre_item(qs->items[*item]))
+    {
+        playlist_home_change_genre();
+        talk_qs_option(qs->items[*item], false);
+        return true;
+    }
+#endif
 
     option_select_next_val(qs->items[*item], previous, true);
     talk_qs_option(qs->items[*item], false);
@@ -466,7 +514,7 @@ static void quickscreen_main(struct quickscreen * qs)
         }
         if (quickscreen_do_button(qs, button, &item))
         {
-            qs->result |= QUICKSCREEN_CHANGED;
+            if (!genre_item(qs->items[item])) qs->result |= QUICKSCREEN_CHANGED;
             can_quit = true;
             quickscreen_update(qs, item);
         }
@@ -510,6 +558,11 @@ int quickscreen_show(int button_enter)
     FOR_QS_ITEMS(i)
     {
         qs.items[i] = global_settings.qs_items[i];
+#ifdef SANSA_CLIP
+        if (i == QUICKSCREEN_LEFT &&
+            home_autoplay_active())
+            qs.items[i] = find_setting(&global_settings.playlist_shuffle);
+#endif
 
         if (!is_setting_quickscreenable(qs.items[i]))
             qs.items[i] = NULL;

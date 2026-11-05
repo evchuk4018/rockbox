@@ -28,9 +28,11 @@
 static struct home_picks picks;
 static char pins[HOME_MAX_PINS][MAX_PATH];
 static int pin_count;
+static unsigned int liked_revision;
 
-static bool sample_track(const char *path)
+static bool sample_track(const char *path, void *context)
 {
+    (void)context;
     static struct mp3entry id3;
     if (get_metadata(&id3, -1, path))
         home_sample_add(&picks, path, id3.title, id3.artist, id3.genre_string);
@@ -42,7 +44,8 @@ static void refresh_songs(void)
     home_scores_compact();
     home_sample_begin(&picks, ((uint32_t)rand() << 16) ^ rand());
     if (file_exists(HOME_LIKED_PLAYLIST))
-        playlist_entries_iterate(HOME_LIKED_PLAYLIST, NULL, sample_track);
+        home_liked_foreach(sample_track, NULL);
+    liked_revision = home_liked_revision();
     picks.refreshed_at = (uint32_t)current_tick;
     picks.initialized = true;
 }
@@ -108,7 +111,8 @@ static int speak_item(int item, void *data)
 
 int home_screen(void)
 {
-    if (home_refresh_due(&picks, (uint32_t)current_tick))
+    if (liked_revision != home_liked_revision() ||
+        home_refresh_due(&picks, (uint32_t)current_tick))
         refresh_songs();
     if (home_scores_save_failed())
         splash(HZ * 2, ID2P(LANG_HOME_SCORE_SAVE_FAILED));

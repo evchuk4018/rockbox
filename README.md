@@ -101,7 +101,41 @@ pins on reruns and never copies or edits audio. The current library produces
 by Git. Replace `simdisk/Playlists/Liked Songs.m3u8` with your prepared UTF-8
 playlist when ready; relative paths are resolved from the playlist's directory.
 Missing or unreadable tracks are skipped, and Home shows a message if no liked
-tracks with usable genres remain. Like/Unlike is future work.
+tracks with usable genres remain.
+
+### Now Playing controls and Likes
+
+On the original Clip's Now Playing screen, tap the **middle button (Space)**
+to pause or resume and tap **Up** to like or unlike the song. Holding the middle
+button still opens the context menu; holding Up still opens pitch control and
+does not also toggle the like. Menu and list controls stay the same. **Down**
+opens the queue, **Left/Right** skip tracks, and holding Left/Right seeks.
+
+Likes are saved directly in `/Playlists/Liked Songs.m3u8`. The blue heart below
+the progress bar is outlined when unliked and filled when liked. Unliking removes
+all matching entries without changing the current queue or listening scores.
+Home refreshes its suggestions on your next visit after a like change. The
+playlist is created on the first like if absent; prepared relative paths and
+Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
+of absolute paths, preserving other tracks and their order.
+
+The progress bar is now near the bottom. The countdown underneath, such as
+**-2:34**, shows remaining song time. The row above contains **battery/charging**,
+**shuffle/change genre**, and **playback state** (playing, paused, stopped, or
+seeking). The previous lock, volume, and repeat icons and track counter are
+removed from Now Playing. These icons display status; use the physical buttons
+to control playback.
+
+During Home genre autoplay, **hold Home (Insert), then press Left** in the Quick
+Screen to select **Change Genre**. A different genre is selected from playable
+Liked Songs, using the existing listening weights. The current song finishes;
+the next song begins a fresh mix in the selected genre. The Quick Screen shows
+the selected genre, and an **asterisk beside the shuffle icon** marks the pending
+change. Further presses leave the same request queued. **Next** starts it early;
+pause and seek preserve it. Stop, backward track navigation, another playlist or
+Home session, and restarting clear it. If no other liked genre is available,
+the existing mix continues. In ordinary playlists the same shortcut toggles
+normal shuffle. The footer layout is specific to the Clip's Cabbie theme.
 
 Initialize the music database once under **Settings → Settings → General
 Settings → Database → Initialize Now**, then restart if prompted. Genre autoplay
