@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include "home_autoplay.h"
 #include "home_screen.h"
 #include "appevents.h"

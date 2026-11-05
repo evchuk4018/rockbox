@@ -2,7 +2,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <strings.h>
 #include "home_screen.h"
 #include "home_autoplay.h"
 #include "action.h"
