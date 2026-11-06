@@ -32,6 +32,11 @@ void catalog_set_directory(const char* directory);
  */
 bool catalog_view_playlists(void);
 
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+/* Pick an existing playlist and add a track once. True also means already present. */
+bool catalog_add_track_to_a_playlist(const char *track);
+#endif
+
 bool catalog_pick_new_playlist_name(char *pl_name, size_t buf_size,
                                     const char* curr_pl_name);
 

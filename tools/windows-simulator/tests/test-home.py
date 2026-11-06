@@ -8,6 +8,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
+WINDOWS_GCC = Path("C:/msys64/ucrt64/bin/gcc.exe")
+GCC = str(WINDOWS_GCC) if WINDOWS_GCC.is_file() else shutil.which("gcc")
 SPEC = importlib.util.spec_from_file_location("seed_home", ROOT / "scripts/seed-home-playlists.py")
 SEED = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SEED)
@@ -71,7 +73,7 @@ int main(int argc, char **argv) {
             source_file = Path(directory) / "skin.c"
             source_file.write_text(source, encoding="utf-8")
             executable = Path(directory) / "skin.exe"
-            subprocess.run(["C:/msys64/ucrt64/bin/gcc.exe", "-std=gnu11", "-D__PCTOOL__",
+            subprocess.run([GCC, "-std=gnu11", "-D__PCTOOL__",
                             "-I", str(parser), str(source_file),
                             *(str(parser / name) for name in ("skin_parser.c", "skin_scan.c", "skin_debug.c", "skin_buffer.c", "tag_table.c")),
                             "-o", str(executable)], check=True)
@@ -113,15 +115,25 @@ int main(int argc, char **argv) {
         self.assertNotIn("%pr", skin)
         self.assertNotIn("%Sx(Next:)", skin)
         self.assertNotIn("%?It", skin)
+        self.assertIn("%xl(E,add-playlist-clip.bmp,0,0)", skin)
+        self.assertIn("%xd(E)", skin)
+        self.assertNotIn("%?mm", skin)
+        import struct
+        icon = (ROOT / "wps/cabbiev2/add-playlist-clip.bmp").read_bytes()
+        self.assertEqual(icon[:2], b"BM")
+        self.assertEqual(struct.unpack_from("<iiHH", icon, 18), (12, 8, 1, 1))
 
     def test_clip_button_events(self):
         import re
         keymap = (ROOT / "apps/keymaps/keymap-clip.c").read_text(encoding="utf-8")
         arrays = []
-        for name in ("standard", "wps"):
+        for name in ("standard", "wps", "home"):
             start = keymap.index(f"static const struct button_mapping button_context_{name}[]")
             end = keymap.index("};", start) + 2
-            arrays.append(keymap[start:end])
+            mapping = keymap[start:end]
+            if name == "home":
+                mapping = "#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)\n" + mapping + "\n#endif"
+            arrays.append(mapping)
         mappings = "\n".join(arrays)
         actions = sorted(set(re.findall(r"\bACTION_\w+", mappings)) - {"ACTION_NONE"})
         buttons = sorted(set(re.findall(r"\bBUTTON_\w+", mappings)) - {"BUTTON_NONE"})
@@ -133,6 +145,7 @@ int main(int argc, char **argv) {
 #include <stddef.h>
 #define BUTTON_NONE 0
 #define LAST_ITEM_IN_LIST {0, 0, 0}
+#define LAST_ITEM_IN_LIST__NEXTLIST(context) LAST_ITEM_IN_LIST
 #define HAS_BUTTON_HOLD
 #define has_flag(value, flag) (((value) & (flag)) == (flag))
 struct button_mapping { int action_code, button_code, pre_button_code; };
@@ -153,9 +166,17 @@ int main(void)
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_PLAY);
     assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_UP) == ACTION_WPS_TOGGLE_LIKE);
+    assert(resolve(wps, BUTTON_SELECT | BUTTON_UP, BUTTON_SELECT) == ACTION_WPS_ADD_TO_PLAYLIST);
+    assert(resolve(wps, BUTTON_SELECT | BUTTON_UP | BUTTON_REPEAT, BUTTON_SELECT | BUTTON_UP) != ACTION_WPS_ADD_TO_PLAYLIST);
+    assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_SELECT | BUTTON_UP) != ACTION_WPS_TOGGLE_LIKE);
+    assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT | BUTTON_UP) != ACTION_WPS_PLAY);
+    assert(resolve(button_context_home, BUTTON_RIGHT, BUTTON_NONE) == ACTION_STD_OK);
+    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_PLAY);
+    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT | BUTTON_REPEAT) != ACTION_WPS_PLAY);
 #else
     assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_BROWSE);
     assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_UP) == ACTION_WPS_PLAY);
+    assert(resolve(wps, BUTTON_SELECT | BUTTON_UP, BUTTON_SELECT) != ACTION_WPS_ADD_TO_PLAYLIST);
 #endif
     assert(resolve(wps, BUTTON_UP, BUTTON_NONE) != ACTION_WPS_TOGGLE_LIKE);
     assert(resolve(wps, BUTTON_UP | BUTTON_REPEAT, BUTTON_UP) == ACTION_WPS_PITCHSCREEN);
@@ -165,10 +186,11 @@ int main(void)
     assert(resolve(std, BUTTON_UP, BUTTON_NONE) == ACTION_STD_PREV);
     assert(resolve(std, BUTTON_UP | BUTTON_REPEAT, BUTTON_UP) == ACTION_STD_PREVREPEAT);
     assert(resolve(std, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_STD_OK);
+    assert(resolve(std, BUTTON_SELECT | BUTTON_UP, BUTTON_SELECT) != ACTION_WPS_ADD_TO_PLAYLIST);
     return 0;
 }
 """
-        gcc = "C:/msys64/ucrt64/bin/gcc.exe"
+        gcc = GCC
         with tempfile.TemporaryDirectory(prefix="rockbox-buttons-") as directory:
             source = Path(directory) / "buttons.c"
             source.write_text(code, encoding="utf-8")
@@ -238,14 +260,13 @@ int main(void)
             work = Path(directory)
             source, executable = work / "open.c", work / "open.exe"
             source.write_text(code, encoding="utf-8")
-            subprocess.run(["C:/msys64/ucrt64/bin/gcc.exe", "-std=gnu11", "-Wall", "-Wextra",
+            subprocess.run([GCC, "-std=gnu11", "-Wall", "-Wextra",
                             "-Werror", str(source), "-o", str(executable)], check=True)
             subprocess.run([str(executable)], check=True)
 
     def test_native_home_and_playback(self):
-        bundled_gcc = Path("C:/msys64/ucrt64/bin/gcc.exe")
-        gcc = str(bundled_gcc) if bundled_gcc.is_file() else shutil.which("gcc")
-        self.assertIsNotNone(gcc, "A native Windows GCC compiler is required")
+        gcc = GCC
+        self.assertIsNotNone(gcc, "A host GCC compiler is required")
         with tempfile.TemporaryDirectory(prefix="rockbox-home-") as directory:
             work = Path(directory)
             headers = {
@@ -253,7 +274,7 @@ int main(void)
                 "adapter.h": "#define __ACTION_H__\n#define MISC_H\n#define __PLAYLIST_H__\n#define __SETTINGS_H__\n#define _TAGCACHE_H\n#define _APPEVENTS_H\n#include <action.h>\n#include <misc.h>\n#include <playlist.h>\n#include <settings.h>\n#include <tagcache.h>\n#include <appevents.h>\n",
                 "rbpaths.h": '#pragma once\n#define ROCKBOX_DIR "."\n',
                 "kernel.h": "#pragma once\n#define HZ 100\n#define MIN(a,b) ((a)<(b)?(a):(b))\nstruct mutex { int unused; };\nvoid mutex_init(struct mutex *);\nvoid mutex_lock(struct mutex *);\nvoid mutex_unlock(struct mutex *);\nvoid yield(void);\n",
-                "action.h": "#pragma once\nenum { ACTION_NONE, ACTION_STD_PREV, ACTION_STD_PREVREPEAT, ACTION_STD_MENU, ACTION_WPS_MENU };\n",
+                "action.h": "#pragma once\nenum { ACTION_NONE, ACTION_STD_PREV, ACTION_STD_PREVREPEAT, ACTION_STD_MENU, ACTION_WPS_MENU, ACTION_WPS_ADD_TO_PLAYLIST };\n",
                 "misc.h": "#pragma once\nint read_line(int, char *, int);\nint open_utf8(const char *, int);\n",
                 "dir.h": "#pragma once\nint test_mkdir(const char *);\n#define mkdir test_mkdir\n",
                 "string-extra.h": "#pragma once\n#include <stddef.h>\n#include <strcasecmp.h>\nsize_t strlcpy(char *, const char *, size_t);\n",
@@ -264,7 +285,7 @@ int main(void)
                 "metadata.h": "#pragma once\n#include <stdbool.h>\n#include <file.h>\nstruct mp3entry { char path[MAX_PATH]; char *title, *artist, *genre_string; unsigned long elapsed, length; };\nbool get_metadata(struct mp3entry *, int, const char *);\n",
                 "audio.h": "#pragma once\n#include <metadata.h>\nenum { TEF_NONE, TEF_CURRENT=1, TEF_AUTO_SKIP=2, TEF_REWIND=4 };\nstruct track_event { unsigned int flags; struct mp3entry *id3; };\nvoid audio_stop(void);\n#define AUDIO_STATUS_PLAY 1\nint audio_status(void);\nvoid audio_flush_and_reload_tracks(void);\nstruct mp3entry *audio_current_track(void);\n",
                 "appevents.h": "#pragma once\n#include <stdbool.h>\nenum { PLAYBACK_EVENT_TRACK_CHANGE, PLAYBACK_EVENT_TRACK_FINISH };\nbool add_event(unsigned short, void (*)(unsigned short, void *));\n",
-                "lang.h": "#pragma once\n#include <stdint.h>\nenum { LANG_HOME_DATABASE, LANG_TAGCACHE_BUSY, LANG_FAILED, LANG_HOME_NO_OTHER_GENRE };\n#define ID2P(x) ((const char *)(intptr_t)(x))\n",
+                "lang.h": "#pragma once\n#include <stdint.h>\nenum { LANG_HOME_DATABASE, LANG_TAGCACHE_BUSY, LANG_FAILED, LANG_HOME_NO_OTHER_GENRE, LANG_PLAYLIST_ADDED, LANG_PLAYLIST_ALREADY_ADDED, LANG_PLAYLIST_ADD_FAILED, LANG_CATALOG_NO_PLAYLISTS };\n#define ID2P(x) ((const char *)(intptr_t)(x))\n",
                 "splash.h": "#pragma once\nvoid splash(int, const char *);\n",
                 "settings.h": "#pragma once\n#include <stdbool.h>\nstruct test_settings { int repeat_mode, next_folder; bool playlist_shuffle; int max_files_in_playlist; };\nextern struct test_settings global_settings;\n",
                 "playlist.h": """#pragma once
@@ -356,7 +377,18 @@ void _logdiskf(const char *file, const char level, const char *format, ...);
             extracted.append(function(fixedpoint, "long fp16_log("))
             extracted.append(function(abrepeat[abrepeat.index('#else /*def AB_REPEAT_ENABLE*/'):],
                                       "static inline bool ab_repeat_mode_enabled("))
+            catalog = (ROOT / "apps/playlist_catalog.c").read_text(encoding="utf-8")
+            io_names = {"open": "test_open", "read": "test_read", "write": "test_write",
+                        "close": "test_close", "fsync": "test_sync", "rename": "test_rename",
+                        "remove": "test_remove"}
+            extracted.append("\n".join(f"#define {name} {adapter}" for name, adapter in io_names.items())
+                             + "\n" + "\n\n".join(function(catalog, signature) for signature in (
+                                 "static int catalog_read_line(", "static int catalog_append_unique(",
+                                 "bool catalog_add_track_to_a_playlist("))
+                             + "\n" + "\n".join(f"#undef {name}" for name in io_names))
+            wps = (ROOT / "apps/gui/wps.c").read_text(encoding="utf-8")
             harness = (Path(__file__).parent / "home-harness.c").read_text(encoding="utf-8")
+            harness = harness.replace("/* WPS_ADD_ACTION */", function(wps, "case ACTION_WPS_ADD_TO_PLAYLIST:"))
             (work / "test.c").write_text(harness.replace("/* PRODUCTION_FUNCTIONS */", "\n\n".join(extracted)), encoding="utf-8")
             env = os.environ.copy()
             env["PATH"] = str(Path(gcc).parent) + os.pathsep + env["PATH"]
@@ -368,7 +400,7 @@ void _logdiskf(const char *file, const char level, const char *format, ...);
                 run_dir = work / name
                 run_dir.mkdir()
                 executable = run_dir / "home-test.exe"
-                subprocess.run([gcc, "-std=c11", "-fwrapv", "-Wall", "-Wextra", "-Werror",
+                subprocess.run([gcc, "-std=gnu11", "-fwrapv", "-Wall", "-Wextra", "-Werror",
                                 "-include", str(work / "adapter.h"), "-I", str(work),
                                 "-I", str(ROOT / "apps"), *sources, *scanner,
                                 "-o", str(executable)], check=True, env=env)

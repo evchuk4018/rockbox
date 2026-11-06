@@ -24,6 +24,7 @@
 #include "string-extra.h"
 #include "talk.h"
 #include "viewport.h"
+#include "wps.h"
 
 static struct home_picks picks;
 static char pins[HOME_MAX_PINS][MAX_PATH];
@@ -148,7 +149,7 @@ int home_screen(void)
         while (!reload)
         {
             keyclick_set_callback(gui_synclist_keyclick_callback, &list);
-            int action = get_action(CONTEXT_TREE | ALLOW_SOFTLOCK,
+            int action = get_action(CONTEXT_CUSTOM | CONTEXT_MAINMENU | ALLOW_SOFTLOCK,
                                     list_do_action_timeout(&list, HZ));
             int selected = gui_synclist_get_sel_pos(&list);
             if (home_manual_refresh(action, selected))
@@ -163,6 +164,11 @@ int home_screen(void)
             int pin = home_selection - song_rows();
             switch (action)
             {
+                case ACTION_WPS_PLAY:
+                    if (audio_status() & AUDIO_STATUS_PLAY)
+                        wps_do_action(audio_status() & AUDIO_STATUS_PAUSE ?
+                                      WPS_PLAY : WPS_PAUSE, false);
+                    break;
                 case ACTION_STD_OK:
                     if (home_selection < picks.count)
                     {

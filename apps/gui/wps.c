@@ -23,6 +23,8 @@
 #include "config.h"
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
+#include "playlist_catalog.h"
+#include "string-extra.h"
 #endif
 
 #include "system.h"
@@ -820,6 +822,26 @@ long gui_wps_show(void)
         switch(button)
         {
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+            case ACTION_WPS_ADD_TO_PLAYLIST:
+            {
+                char track[MAX_PATH];
+                if (!state->id3 || !state->id3->path[0]) break;
+                strlcpy(track, state->id3->path, sizeof(track));
+                /* The normal release filter stops at the first release in a
+                 * chord. Ignore both keys until up, without losing USB events. */
+                while (button_status() & (BUTTON_SELECT | BUTTON_UP))
+                    if (default_event_handler(get_action(CONTEXT_WPS, HZ / 10))
+                        == SYS_USB_CONNECTED)
+                    {
+                        gwps_leave_wps(true);
+                        return GO_TO_ROOT;
+                    }
+                action_wait_for_release();
+                gwps_leave_wps(true);
+                catalog_add_track_to_a_playlist(track);
+                restore = true;
+                break;
+            }
             case ACTION_WPS_TOGGLE_LIKE:
                 if (state->id3 && home_toggle_like(state->id3->path) < 0)
                     splash(HZ * 2, ID2P(LANG_HOME_LIKE_FAILED));

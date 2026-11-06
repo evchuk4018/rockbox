@@ -43,6 +43,7 @@ int home_toggle_pin(const char *path);
 int home_liked_state(const char *path);
 int home_toggle_like(const char *path);
 void home_liked_invalidate(void);
+void home_liked_changed(void);
 unsigned int home_liked_revision(void);
 bool home_liked_foreach(bool (*visit)(const char *, void *), void *context);
 

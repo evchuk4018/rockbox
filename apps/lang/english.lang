@@ -17425,3 +17425,45 @@
     *: "Could not save Liked Songs"
   </voice>
 </phrase>
+<phrase>
+  id: LANG_PLAYLIST_ADDED
+  desc: Clip Now Playing song added to an existing playlist
+  user: core
+  <source>
+    *: "Added to playlist"
+  </source>
+  <dest>
+    *: "Added to playlist"
+  </dest>
+  <voice>
+    *: "Added to playlist"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PLAYLIST_ALREADY_ADDED
+  desc: Clip Now Playing song already exists in the selected playlist
+  user: core
+  <source>
+    *: "Already in playlist"
+  </source>
+  <dest>
+    *: "Already in playlist"
+  </dest>
+  <voice>
+    *: "Already in playlist"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PLAYLIST_ADD_FAILED
+  desc: Clip Now Playing could not save a song to the selected playlist
+  user: core
+  <source>
+    *: "Could not add to playlist"
+  </source>
+  <dest>
+    *: "Could not add to playlist"
+  </dest>
+  <voice>
+    *: "Could not add to playlist"
+  </voice>
+</phrase>

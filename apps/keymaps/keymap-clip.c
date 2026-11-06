@@ -54,6 +54,7 @@ static const struct button_mapping button_context_standard[]  = {
 
 static const struct button_mapping button_context_wps[]  = {
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    { ACTION_WPS_ADD_TO_PLAYLIST, BUTTON_SELECT|BUTTON_UP, BUTTON_SELECT },
     { ACTION_WPS_TOGGLE_LIKE, BUTTON_UP|BUTTON_REL,     BUTTON_UP },
     { ACTION_WPS_PLAY,     BUTTON_SELECT|BUTTON_REL,    BUTTON_SELECT },
 #else
@@ -168,6 +169,15 @@ static const struct button_mapping button_context_listtree_scroll_with_combo[]  
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_CUSTOM|CONTEXT_TREE),
 }; /* button_context_listtree_scroll_with_combo */
+
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+static const struct button_mapping button_context_home[] = {
+    { ACTION_WPS_PLAY, BUTTON_SELECT|BUTTON_REL, BUTTON_SELECT },
+    { ACTION_STD_OK,   BUTTON_RIGHT,             BUTTON_NONE },
+
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_TREE),
+};
+#endif
 
 static const struct button_mapping button_context_mainmenu[]  = {
     { ACTION_TREE_WPS, BUTTON_HOME|BUTTON_REL, BUTTON_HOME },
@@ -422,6 +432,10 @@ const struct button_mapping* get_context_mapping(int context)
                 return button_context_listtree_scroll_with_combo;
         case CONTEXT_MAINMENU:
             return button_context_mainmenu;
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+        case CONTEXT_CUSTOM|CONTEXT_MAINMENU:
+            return button_context_home;
+#endif
         case CONTEXT_CUSTOM|CONTEXT_TREE:
             return button_context_tree;
 

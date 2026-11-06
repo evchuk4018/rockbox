@@ -380,6 +380,7 @@ enum {
     ACTION_USB_HID_LAST, /* Place holder */
 
     ACTION_WPS_TOGGLE_LIKE,
+    ACTION_WPS_ADD_TO_PLAYLIST,
     LAST_ACTION_PLACEHOLDER, /* custom actions should be this + something */
 };
 

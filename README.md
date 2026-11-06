@@ -116,6 +116,12 @@ The Sansa Clip and Clip+ targets open a scrolling Home list beneath the
 existing header: three liked-song suggestions, pinned playlists, then
 **Settings**. That final entry opens the complete former Home menu.
 
+On this Home screen, press **Right** to select the highlighted song, playlist,
+or Settings entry. Tap **middle** (**Space** in the simulator) to pause/resume
+background playback while staying on Home. It does nothing when no audio is
+playing. Holding middle still opens a pinned playlist's context menu. Other
+menus and playlist pickers keep middle-button selection.
+
 Suggestions come from `/Playlists/Liked Songs.m3u8` and use three different
 primary genre tags, without requiring the Rockbox database. They stay fixed
 while browsing and refresh on the next Home visit after 30 minutes, or when
@@ -164,6 +170,16 @@ button still opens the context menu; holding Up still opens pitch control and
 does not also toggle the like. Menu and list controls stay the same. **Down**
 opens the queue, **Left/Right** skip tracks, and holding Left/Right seeks.
 
+Hold **middle and press Up** (**Space + Up** in the simulator) to open the
+full-screen **Playlists** picker. Release both buttons, scroll with Up/Down,
+then press middle to append the song or Left to cancel. Playback continues,
+and the picker remembers the song that was playing when you opened it, even
+if the next track starts while you browse. An existing song is left unchanged
+with **Already in playlist**; a new entry shows **Added to playlist**.
+Choosing Liked Songs fills the heart and refreshes Home suggestions on the next
+visit. This shortcut selects existing playlists from the configured catalog
+(normally `/Playlists`); create playlists through the existing menus or Manager.
+
 Likes are saved directly in `/Playlists/Liked Songs.m3u8`. The blue heart below
 the progress bar is outlined when unliked and filled when liked. Unliking removes
 all matching entries without changing the current queue or listening scores.
@@ -183,11 +199,12 @@ bars keep their original heights: 1–4 pixels stay unchanged, while 5-pixel pea
 reach 7 pixels and 6-pixel peaks reach 10. Quiet passages stay low. Pausing or stopping shows the low baseline.
 
 Five evenly spaced footer icons sit below the progress bar: **battery/charging**,
-**shuffle/change genre**, **playback state**, **repeat mode**, and the **like heart**.
+**shuffle/change genre**, **playback state**, **add to playlist**, and the **like heart**.
 The icons use clean pixel shapes matching the reference: battery, crossed arrows,
-filled play triangle (or pause/stop), two curved repeat arrows, and outlined/filled heart.
-The shuffle and repeat symbols remain visible; repeat-one adds a small 1. These icons display
-status and controls; use the physical buttons and Quick Screen to operate them.
+filled play triangle (or pause/stop), playlist lines with a plus, and outlined/filled heart.
+The playlist-plus icon marks the Middle + Up shortcut. Repeat remains available
+through playback settings and the Quick Screen. Use the physical buttons and
+Quick Screen to operate the other controls.
 The track counter, lock/volume indicators, and Next section remain absent.
 
 During Home genre autoplay, **hold Home (Insert), then press Left** in the Quick

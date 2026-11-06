@@ -3,15 +3,32 @@
 #include <errno.h>
 #include <limits.h>
 #include <ctype.h>
-#include <direct.h>
-#include <io.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <stdint.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <io.h>
 #include <windows.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#define _mkdir(path) mkdir(path, 0777)
+#define _rmdir rmdir
+#define _open open
+#define _read read
+#define _close close
+#define _commit fsync
+#define _chsize ftruncate
+#define _access access
+#define O_BINARY 0
+#define MoveFileExA(src, dst, flags) (rename(src, dst) == 0)
+#define _set_abort_behavior(...) ((void)0)
+#define _set_error_mode(...) ((void)0)
+#endif
 #undef MAX_PATH
 #define MAX_PATH 260
 #include "home_screen.h"
@@ -22,6 +39,7 @@
 #include "kernel.h"
 #include "action.h"
 #include "pathfuncs.h"
+#include "lang.h"
 #define DEBUGF(...) ((void)0)
 #define logf(...) ((void)0)
 #define BOM_UTF_8_SIZE 3
@@ -64,7 +82,7 @@ static const char *disk_path(const char *path)
 int test_mkdir(const char *path) { return _mkdir(disk_path(path)); }
 static int fail_write, fail_sync, fail_rename, rename_failure_countdown;
 static int fail_open, fail_read, fail_close, fail_alloc;
-static bool short_write;
+static bool short_write, short_read;
 int test_open(const char *path, int flags, ...)
 {
     if (fail_open) { errno = EACCES; return -1; }
@@ -73,6 +91,7 @@ int test_open(const char *path, int flags, ...)
 int test_read(int fd, void *data, size_t length)
 {
     if (fail_read) { errno = EIO; return -1; }
+    if (short_read && length > 5) length = 5;
     return _read(fd, data, (unsigned int)length);
 }
 int test_write(int fd, const void *data, size_t length)
@@ -97,6 +116,7 @@ int test_rename(const char *old, const char *new)
     if (rename_failure_countdown > 0 && --rename_failure_countdown == 0) return -1;
     return !fail_rename && MoveFileExA(disk_path(old), disk_path(new), MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
 }
+static int test_remove(const char *path) { return remove(disk_path(path)); }
 int test_truncate(int fd, off_t length) { return _chsize(fd, length); }
 size_t strlcpy(char *dest, const char *src, size_t size)
 {
@@ -242,7 +262,8 @@ bool tagcache_get_next(struct tagcache_search *s, char *path, long size)
 }
 void tagcache_search_finish(struct tagcache_search *s) { (void)s; }
 static int splash_count;
-void splash(int ticks, const char *message) { (void)ticks; (void)message; splash_count++; }
+static const char *last_splash;
+void splash(int ticks, const char *message) { (void)ticks; last_splash = message; splash_count++; }
 static void (*callbacks[2])(unsigned short, void *);
 bool add_event(unsigned short event, void (*callback)(unsigned short, void *))
 { callbacks[event] = callback; return true; }
@@ -291,7 +312,65 @@ static int get_track_filename(struct playlist_info *p, int index, char *out, int
     return 0;
 }
 
+/* Catalog UI and the default Latin-1 codepage are platform adapters. The
+ * picker deliberately changes playing metadata to test track capture. */
+enum catbrowse_status_flags { CATBROWSE_NOTHING, CATBROWSE_CATVIEW, CATBROWSE_PLAYLIST };
+static int browser_status, picker_result, catalog_init_result, picker_calls, catalog_reloads;
+static const char *picker_playlist = "/Playlists/Selected.m3u8";
+static bool picker_changes_track;
+static int initialize_catalog(void) { return catalog_init_result; }
+static int display_playlists(char *playlist, enum catbrowse_status_flags status)
+{
+    assert(status == CATBROWSE_PLAYLIST);
+    picker_calls++;
+    if (picker_changes_track) strlcpy(playing_id3.path, library[2].path, MAX_PATH);
+    if (picker_result == -2) splash(HZ * 2, ID2P(LANG_CATALOG_NO_PLAYLISTS));
+    if (picker_result < 0) return -1;
+    strlcpy(playlist, picker_playlist, MAX_PATH);
+    return 0;
+}
+static void reload_directory(void) { catalog_reloads++; }
+static unsigned char *iso_decode(const unsigned char *input, unsigned char *out, int cp, int count)
+{
+    assert(cp == -1);
+    while (count--)
+    {
+        unsigned char c = *input++;
+        if (c >= 128) { *out++ = 0xc0 | (c >> 6); c = 0x80 | (c & 63); }
+        *out++ = c;
+    }
+    return out;
+}
+
 /* PRODUCTION_FUNCTIONS */
+
+enum { BUTTON_SELECT = 1, BUTTON_UP = 2, CONTEXT_WPS = 3, SYS_USB_CONNECTED = 4,
+       GO_TO_ROOT = 5 };
+static int held_buttons, release_step, release_order, wait_calls, wps_leaves;
+static bool shortcut_usb;
+static int button_status(void) { return held_buttons; }
+static int get_action(int context, int timeout)
+{
+    assert(context == CONTEXT_WPS && timeout == HZ / 10);
+    release_step++;
+    if (release_step == 1) return ACTION_NONE; /* held chord repeats */
+    held_buttons = release_step == 2 ? release_order : 0;
+    strlcpy(playing_id3.path, library[2].path, MAX_PATH);
+    return shortcut_usb ? SYS_USB_CONNECTED : ACTION_NONE;
+}
+static long default_event_handler(long action) { return action; }
+static void action_wait_for_release(void) { wait_calls++; }
+static void gwps_leave_wps(bool theme) { assert(theme); wps_leaves++; }
+static int run_wps_add_action(void)
+{
+    struct { struct mp3entry *id3; } wps = {.id3 = &playing_id3}, *state = &wps;
+    bool restore = false;
+    switch (ACTION_WPS_ADD_TO_PLAYLIST)
+    {
+        /* WPS_ADD_ACTION */
+    }
+    return restore;
+}
 
 static void start_track(int index)
 {
@@ -1137,6 +1216,160 @@ static void test_likes(void)
     remove("Playlists/Liked Songs.m3u8");
 }
 
+static void put_playlist(const char *path, const char *text)
+{
+    FILE *f = fopen(disk_path(path), "wb");
+    assert(f && fwrite(text, 1, strlen(text), f) == strlen(text));
+    assert(!fclose(f));
+}
+
+static void expect_playlist(const char *path, const char *expected)
+{
+    char contents[2048];
+    FILE *f = fopen(disk_path(path), "rb");
+    assert(f);
+    size_t n = fread(contents, 1, sizeof(contents), f);
+    assert(!ferror(f) && !fclose(f));
+    assert(n == strlen(expected) && !memcmp(contents, expected, n));
+    char temp[MAX_PATH + 4];
+    snprintf(temp, sizeof(temp), "%s.tmp", path);
+    assert(_access(disk_path(temp), 0) != 0);
+}
+
+static void test_add_to_playlist(void)
+{
+    char normalized[MAX_PATH];
+    path_remove_dot_segments(normalized, "/Playlists/Nested/../../Music/./seed.mp3");
+    assert(!strcmp(normalized, "/Music/seed.mp3"));
+    path_remove_dot_segments(normalized, "/../../Music/seed.mp3");
+    assert(!strcmp(normalized, "/Music/seed.mp3"));
+    _mkdir("Playlists");
+    const char *path = "/Playlists/Selected.m3u8";
+    const char *original = "\xef\xbb\xbf#EXTM3U\r\n# keep this comment\r\n../Music/seed.mp3\r\n";
+    picker_playlist = path;
+    put_playlist(path, original);
+    picker_result = -1; /* cancel */
+    int messages = splash_count, selections = picker_calls;
+    assert(!catalog_add_track_to_a_playlist(library[4].path));
+    assert(picker_calls == selections + 1 && splash_count == messages);
+    expect_playlist(path, original);
+    picker_result = -2; /* existing picker reports an empty catalog */
+    assert(!catalog_add_track_to_a_playlist(library[4].path));
+    assert(last_splash == ID2P(LANG_CATALOG_NO_PLAYLISTS));
+    expect_playlist(path, original);
+    picker_result = 0;
+    catalog_init_result = -1;
+    selections = picker_calls;
+    assert(!catalog_add_track_to_a_playlist(library[4].path));
+    assert(picker_calls == selections);
+    catalog_init_result = 0;
+    browser_status = CATBROWSE_PLAYLIST;
+    assert(!catalog_add_track_to_a_playlist(library[4].path));
+    browser_status = 0;
+
+    assert(catalog_add_track_to_a_playlist("/Music/./seed.mp3"));
+    assert(last_splash == ID2P(LANG_PLAYLIST_ALREADY_ADDED));
+    expect_playlist(path, original);
+    short_read = true;
+    assert(catalog_add_track_to_a_playlist(library[4].path));
+    short_read = false;
+    assert(last_splash == ID2P(LANG_PLAYLIST_ADDED));
+    const char *added = "\xef\xbb\xbf#EXTM3U\r\n# keep this comment\r\n../Music/seed.mp3\r\n/Music/歌曲 troisième.mp3\n";
+    expect_playlist(path, added);
+    assert(catalog_add_track_to_a_playlist(library[4].path));
+    expect_playlist(path, added);
+    put_playlist(path, "#EXTM3U\n/Music/SEED.mp3");
+    assert(catalog_add_track_to_a_playlist(library[0].path));
+    expect_playlist(path, "#EXTM3U\n/Music/SEED.mp3\n/Music/seed.mp3\n");
+
+    for (int size = 0; size < 3; size++)
+    {
+        const char *small[] = {"", "#", "#x"};
+        char expected[128];
+        put_playlist(path, small[size]);
+        snprintf(expected, sizeof(expected), "%s%s%s\n", small[size], size ? "\n" : "", library[0].path);
+        assert(catalog_add_track_to_a_playlist(library[0].path));
+        expect_playlist(path, expected);
+    }
+    _mkdir("Playlists/Nested");
+    picker_playlist = "/Playlists/Nested/Mix.m3u8";
+    put_playlist(picker_playlist, "../../Music/./seed.mp3\n");
+    assert(catalog_add_track_to_a_playlist(library[0].path));
+    assert(last_splash == ID2P(LANG_PLAYLIST_ALREADY_ADDED));
+    expect_playlist(picker_playlist, "../../Music/./seed.mp3\n");
+
+    picker_playlist = "/Playlists/Legacy.m3u";
+    put_playlist(picker_playlist, "#EXTM3U\r\n../Music/Beyonc\xe9.mp3\r\n");
+    assert(catalog_add_track_to_a_playlist("/Music/Beyoncé.mp3"));
+    assert(last_splash == ID2P(LANG_PLAYLIST_ALREADY_ADDED));
+    expect_playlist(picker_playlist, "#EXTM3U\r\n../Music/Beyonc\xe9.mp3\r\n");
+    assert(catalog_add_track_to_a_playlist(library[4].path));
+    expect_playlist(picker_playlist, "\xef\xbb\xbf#EXTM3U\r\n../Music/Beyoncé.mp3\r\n/Music/歌曲 troisième.mp3\n");
+    assert(catalog_add_track_to_a_playlist("/Music/Beyoncé.mp3")); /* BOM overrides .m3u */
+    assert(last_splash == ID2P(LANG_PLAYLIST_ALREADY_ADDED));
+
+    picker_playlist = path;
+    for (int failure = 0; failure < 7; failure++)
+    {
+        put_playlist(path, original);
+        fail_open = failure == 0; fail_read = failure == 1;
+        fail_write = failure == 2; short_write = failure == 3;
+        fail_sync = failure == 4; fail_close = failure == 5; fail_rename = failure == 6;
+        assert(!catalog_add_track_to_a_playlist(library[4].path));
+        assert(last_splash == ID2P(LANG_PLAYLIST_ADD_FAILED));
+        fail_open = fail_read = fail_write = fail_sync = fail_close = fail_rename = 0;
+        short_write = false;
+        expect_playlist(path, original);
+    }
+    char oversized[MAX_PATH + 20];
+    memset(oversized, 'x', sizeof(oversized)); oversized[sizeof(oversized) - 1] = 0;
+    put_playlist(path, oversized);
+    assert(!catalog_add_track_to_a_playlist(library[0].path));
+    expect_playlist(path, oversized);
+    assert(!catalog_add_track_to_a_playlist("/Music/bad\nline.mp3"));
+    assert(!catalog_add_track_to_a_playlist(NULL));
+
+    write_likes("#EXTM3U\n/Music/rock.mp3\n");
+    assert(home_liked_state(library[0].path) == 0);
+    unsigned int revision_before = home_liked_revision();
+    int stops = audio_stop_count, flushes = flush_count;
+    struct playlist_info queue_before = current_playlist;
+    uint32_t score_before = home_score_get(library[0].path, home_score_time());
+    picker_playlist = HOME_LIKED_PLAYLIST;
+    assert(catalog_add_track_to_a_playlist(library[0].path));
+    assert(home_liked_state(library[0].path) == 1);
+    assert(home_liked_revision() == revision_before + 1);
+    assert(catalog_add_track_to_a_playlist(library[0].path));
+    assert(home_liked_state(library[0].path) == 1 && home_liked_revision() == revision_before + 1);
+    assert(audio_stop_count == stops && flush_count == flushes);
+    assert(!memcmp(&queue_before, &current_playlist, sizeof(queue_before)));
+    assert(home_score_get(library[0].path, home_score_time()) == score_before);
+
+    picker_playlist = path;
+    picker_changes_track = true;
+    for (int order = BUTTON_SELECT; order <= BUTTON_UP; order++)
+    {
+        put_playlist(path, "#EXTM3U\n");
+        strlcpy(playing_id3.path, library[0].path, MAX_PATH);
+        held_buttons = BUTTON_SELECT | BUTTON_UP;
+        release_step = 0; release_order = order;
+        int waits = wait_calls, leaves = wps_leaves;
+        assert(run_wps_add_action() == 1);
+        assert(release_step == 3 && !held_buttons);
+        assert(wait_calls == waits + 1 && wps_leaves == leaves + 1);
+        expect_playlist(path, "#EXTM3U\n/Music/seed.mp3\n");
+        assert(!strcmp(playing_id3.path, library[2].path));
+    }
+    shortcut_usb = true;
+    held_buttons = BUTTON_SELECT | BUTTON_UP; release_step = 0;
+    selections = picker_calls;
+    int leaves = wps_leaves;
+    assert(run_wps_add_action() == GO_TO_ROOT);
+    assert(picker_calls == selections && wps_leaves == leaves + 1);
+    shortcut_usb = picker_changes_track = false;
+    puts("Add to Playlist: safe append, duplicates, encodings, failures, likes and WPS chord checks passed.");
+}
+
 static void test_genre_change(void)
 {
     home_autoplay_init();
@@ -1222,6 +1455,7 @@ int main(void)
     test_batch_failures_and_missing();
     test_library_sized_memory();
     test_likes();
+    test_add_to_playlist();
     test_genre_change();
     puts("Home sampling, pins, 20-song autoplay batches, scores, persistence, and repeat checks passed.");
     return 0;

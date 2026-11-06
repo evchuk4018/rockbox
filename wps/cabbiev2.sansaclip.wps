@@ -4,7 +4,7 @@
 %Fl(3,06-Cabbie-Bold.fnt)
 %xl(B,battery-clip.bmp,0,0,9)
 %xl(D,shuffle-clip.bmp,0,0)
-%xl(E,repeat-clip.bmp,0,0,4)
+%xl(E,add-playlist-clip.bmp,0,0)
 %xl(F,playmode-clip.bmp,0,0,5)
 %xl(H,heart-clip.bmp,0,0,2)
 %xl(V,bars-clip.bmp,0,0,24)
@@ -38,6 +38,6 @@
 %V(61,55,9,9,1)
 %?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
 %V(80,56,12,8,1)
-%?mm<%xd(Ea)|%xd(Ea)|%xd(Eb)|%xd(Ec)|%xd(Ed)>
+%xd(E)
 %V(104,56,9,8,1)
 %?hL<%xd(Hb)|%xd(Ha)>

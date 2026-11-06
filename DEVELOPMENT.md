@@ -71,6 +71,16 @@ button behavior, and deferred genre changes through production playlist
 look-ahead and progression. The native harness runs twice: once with the host C
 library and once with the firmware scanner (`firmware/libc/sscanf.c`) linked in.
 
+The same checks compile the production Add to Playlist writer and WPS action.
+They cover duplicate suppression, relative/nested and Unicode paths, legacy M3U
+conversion, BOMs, comments, line endings, empty/short files, cancellation, read
+and save failures, liked-song revision/cache updates, and unchanged queue/score
+state. Both shortcut release orders and a track change during the picker are
+checked with host button/UI adapters; USB during release handling exits safely.
+The runner also accepts Linux host GCC (`python3 tools/windows-simulator/tests/test-home.py`),
+so the same suite can run in the homelab build container when Windows Application
+Control blocks generated helper executables. No security-policy change is needed.
+
 The firmware C library does not implement `%u` or `%lu` conversions and its
 `%n` assignment count differs from the host library. The score reader therefore parses
 the five decimal fields with checked `strtoul` calls, requires tab separators,
@@ -99,7 +109,9 @@ Invoke-RockboxBash -Msys2Root C:\msys64 -Script "$PWD\tools\windows-simulator\te
 After building and seeding, the user should check the following with `run.ps1`:
 
 1. Press **Insert** for Home. Confirm the existing header, three song rows,
-   Test Mix 1 and 2, then Settings. Long selected titles should scroll.
+   Test Mix 1 and 2, then Settings. Long selected titles should scroll. **Right**
+   selects an entry; **middle/Space** pauses/resumes background playback without
+   leaving Home or selecting the highlighted item. With no audio it does nothing.
 2. Press **Up** on the first song to refresh. Hold Up to confirm it does not
    repeatedly refresh. Start a song, return Home, and refresh without interrupting it.
 3. Initialize the database once using Settings → Settings → General Settings →
@@ -137,10 +149,10 @@ After building and seeding, the user should check the following with `run.ps1`:
     pause. Confirm list Up/Space navigation still works.
 11. Check the Clip Cabbie reference layout: yellow title, blue artist, smaller
     album, taller animated audio bars, left elapsed/right total time, progress, then battery,
-    shuffle, playback, repeat, and heart. Check scrolling and a long album title;
+    shuffle, playback, playlist-plus, and heart. Check scrolling and a long album title;
     album/title duplicates should hide the album line. Low bars should stay low,
     while strong peaks jump higher for a more energetic contrast. Pause and
-    silence should show the baseline. Check the rounded repeat arrows, seeking, pause,
+    silence should show the baseline. Check the playlist-plus icon, seeking, pause,
     and the end of a track. The counter, lock/volume icons, and Next stay absent.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
     Change Genre shows its target and the asterisk appears. Let the current song
@@ -149,12 +161,30 @@ After building and seeding, the user should check the following with `run.ps1`:
     the request; Stop, backward navigation, another playlist and restart should
     clear it. Try a liked playlist with one genre and check the explanatory message.
     Check ordinary-playlist shuffle still toggles with the same shortcut.
+13. During Now Playing, hold middle and press Up (Space + Up in the simulator),
+    then release both keys. Confirm the picker does not move or select an entry
+    on release. Scroll Up/Down and choose a playlist with middle; verify the
+    saved song and Added to playlist message. Try it again for Already in
+    playlist, and use Left to cancel without changes. Open the picker near a
+    track boundary and confirm it adds the original song. Try Liked Songs and
+    check the heart and Home refresh. Playback and the active queue must continue
+    normally. Repeat remains available in playback settings and the Quick Screen.
 
 Likes use a bounded streaming reader and the same path resolver as Rockbox M3U
 playback, with exact case-sensitive identity. Writes use a synced temporary file
 and replacement rename; failure preserves the previous playlist and displayed
 membership. Membership is cached per displayed track, invalidated on track change
 or WPS re-entry. A revision counter invalidates Home suggestions on the next visit.
+The Clip/Clip+ Middle + Up action captures the current path before consuming the
+whole button chord. `catalog_add_track_to_a_playlist` uses the existing catalog
+picker and a bounded streaming replacement writer; a duplicate leaves the file
+unchanged. UTF-8 playlists retain their bytes, comments and line endings. Legacy
+M3U text uses Rockbox's configured codepage and is converted to UTF-8 with a BOM
+when adding, retaining line endings and relative entries. Temporary `.tmp` files
+are synced and closed before rename; failed saves retain the existing playlist.
+Successful Liked Songs additions invalidate membership and advance its revision.
+Path dot-segment removal walks back each parent component, including consecutive
+`..` segments in nested playlists.
 The Clip/Clip+ skin conditions are `%hL` (liked), `%hA` (Home autoplay), and `%hG`
 (pending genre). The reference bars and footer icons are small monochrome bitmap
 assets. Built-in `%pL`/`%pR` conditions select twelve bar frames per channel in

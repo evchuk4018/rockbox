@@ -47,6 +47,10 @@
 #include "bookmark.h"
 #include "root_menu.h"
 #include "general.h"
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+#include "home_screen.h"
+#include "rbunicode.h"
+#endif
 
 /* Use for recursive directory search */
 struct add_track_context {
@@ -251,6 +255,127 @@ restart:
     browser_status &= ~status;
     return result;
 }
+
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+/* Keep line endings for the replacement file. Refuse oversized lines instead
+ * of comparing or saving a truncated path. Reads stay bounded on the Clip. */
+static int catalog_read_line(int fd, char *line, size_t size)
+{
+    size_t used = 0;
+    while (used < size - 1)
+    {
+        ssize_t n = read(fd, line + used, size - 1 - used);
+        if (n < 0) return -1;
+        if (n == 0) break;
+        char *end = memchr(line + used, '\n', n);
+        used += n;
+        if (end)
+        {
+            size_t length = end - line + 1;
+            if (lseek(fd, (off_t)length - (off_t)used, SEEK_CUR) < 0)
+                return -1;
+            used = length;
+            break;
+        }
+    }
+    if (used == size - 1) return -1;
+    line[used] = '\0';
+    return used;
+}
+
+/* 0: appended, 1: already present, -1: failed. Only the temporary file is
+ * written until all reads, writes, sync and closes have succeeded. */
+static int catalog_append_unique(const char *playlist, const char *track)
+{
+    char temp[MAX_PATH + 4];
+    if (snprintf(temp, sizeof(temp), "%s.tmp", playlist) >= (int)sizeof(temp))
+        return -1;
+    int src = open_utf8(playlist, O_RDONLY);
+    if (src < 0) return -1;
+    off_t start = lseek(src, 0, SEEK_CUR);
+    /* open_utf8 may leave a one/two-byte file positioned at EOF. */
+    if (start > 0 && start < BOM_UTF_8_SIZE) start = lseek(src, 0, SEEK_SET);
+    const char *extension = strrchr(playlist, '.');
+    bool legacy = start == 0 && extension && !strcasecmp(extension, ".m3u");
+    int dst = start < 0 ? -1 : open(temp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    bool ok = dst >= 0;
+    if (ok && (start > 0 || legacy))
+        ok = write(dst, BOM_UTF_8, BOM_UTF_8_SIZE) == BOM_UTF_8_SIZE;
+
+    char line[MAX_PATH + 4], decoded[3 * sizeof(line) + 1], path[MAX_PATH];
+    size_t dirlen = strrchr(playlist, '/') - playlist;
+    int n = 0, result = -1;
+    char last = '\n';
+    while (ok && (n = catalog_read_line(src, line, sizeof(line))) > 0)
+    {
+        if (memchr(line, '\0', n)) { ok = false; break; }
+        char *text = line;
+        if (legacy)
+        {
+            unsigned char *end = iso_decode((unsigned char *)line,
+                                           (unsigned char *)decoded, -1, n);
+            *end = '\0';
+            n = end - (unsigned char *)decoded;
+            text = decoded;
+        }
+        last = text[n - 1];
+        ok = write(dst, text, n) == n;
+        if (!ok || text[0] == '#' || text[0] == '\r' || text[0] == '\n')
+            continue;
+        if (playlist_format_track_path(path, text, sizeof(path), playlist, dirlen) < 0)
+            ok = false;
+        else if (!strcmp(path, track))
+        {
+            result = 1;
+            break;
+        }
+    }
+    if (n < 0) ok = false;
+    if (ok && result != 1)
+    {
+        if (last != '\n') ok = write(dst, "\n", 1) == 1;
+        size_t length = strlen(track);
+        if (ok) ok = write(dst, track, length) == (ssize_t)length;
+        if (ok) ok = write(dst, "\n", 1) == 1;
+    }
+    if (close(src) < 0) ok = false;
+    if (dst >= 0)
+    {
+        if (result != 1 && fsync(dst) < 0) ok = false;
+        if (close(dst) < 0) ok = false;
+    }
+    if (ok && result != 1 && rename(temp, playlist) == 0)
+        return 0;
+    if (dst >= 0) remove(temp);
+    return ok && result == 1 ? 1 : -1;
+}
+
+bool catalog_add_track_to_a_playlist(const char *track)
+{
+    char song[MAX_PATH], input[MAX_PATH], playlist[MAX_PATH];
+    if (!track || track[0] != '/' || strlen(track) >= sizeof(input) ||
+        strchr(track, '\n') || strchr(track, '\r') ||
+        (browser_status & CATBROWSE_PLAYLIST))
+        return false;
+    /* The playing track can change while the picker is open. */
+    strlcpy(input, track, sizeof(input));
+    if (playlist_format_track_path(song, input, sizeof(song), "", 0) < 0)
+        return false;
+    if (initialize_catalog() < 0 || display_playlists(playlist, CATBROWSE_PLAYLIST) < 0)
+        return false;
+
+    int result = catalog_append_unique(playlist, song);
+    if (result == 0)
+    {
+        reload_directory();
+        if (!strcmp(playlist, HOME_LIKED_PLAYLIST)) home_liked_changed();
+    }
+    int message = result < 0 ? LANG_PLAYLIST_ADD_FAILED :
+                  result == 1 ? LANG_PLAYLIST_ALREADY_ADDED : LANG_PLAYLIST_ADDED;
+    splash(HZ, ID2P(message));
+    return result >= 0;
+}
+#endif
 
 /* display number of tracks inserted into playlists.  Used for directory
    insert */

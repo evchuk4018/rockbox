@@ -19,6 +19,12 @@ void home_liked_invalidate(void)
 
 unsigned int home_liked_revision(void) { return revision; }
 
+void home_liked_changed(void)
+{
+    home_liked_invalidate();
+    revision++;
+}
+
 /* Silent, bounded streaming reader. Reject truncation instead of rewriting a
  * damaged prefix. open_utf8 accepts an optional BOM; read_line accepts CRLF. */
 static int liked_entry(int fd, char *path)
@@ -123,7 +129,7 @@ int home_toggle_like(const char *path)
     {
         strlcpy(cached_path, path, sizeof(cached_path));
         cached_state = !found;
-        revision++;
+        home_liked_changed();
         return cached_state;
     }
     remove(temp);

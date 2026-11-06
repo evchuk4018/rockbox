@@ -453,7 +453,6 @@ void path_correct_separators(char *dstpath, const char *path)
 void path_remove_dot_segments (char *dstpath, const char *path)
 {
     char *dstp = dstpath;
-    char *odstp = dstpath;
     const char *p = path;
 
     while (*p)
@@ -472,12 +471,12 @@ void path_remove_dot_segments (char *dstpath, const char *path)
         else if (p[0] == PATH_SEPCH && p[1] == '.' &&
             p[2] == '.' && p[3] == PATH_SEPCH)
         {
-            dstp = odstp;
+            while (dstp > dstpath && *--dstp != PATH_SEPCH) {}
             p += 3;
         }
         else if (p[0] == PATH_SEPCH && p[1] == '.' && p[2] == '.' && !p[3])
         {
-            dstp = odstp;
+            while (dstp > dstpath && *--dstp != PATH_SEPCH) {}
             *dstp++ = PATH_SEPCH;
             break;
         }
@@ -487,7 +486,6 @@ void path_remove_dot_segments (char *dstpath, const char *path)
             break;
         else
         {
-            odstp = dstp;
             if (p[0] == PATH_SEPCH)
                 *dstp++ = *p++;
             while (p[0] && p[0] != PATH_SEPCH)
