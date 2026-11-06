@@ -244,16 +244,27 @@ void tagcache_search_finish(struct tagcache_search *);
 #include <stdio.h>
 #define MAX_PATH 260
 int test_write(int, const void *, size_t);
+int test_read(int, void *, size_t);
 int test_open(const char *, int, ...);
+int test_close(int);
 int test_sync(int);
 int test_rename(const char *, const char *);
 int test_truncate(int, off_t);
 bool file_exists(const char *);
 #define write test_write
+#define read test_read
 #define open test_open
+#define close test_close
 #define fsync test_sync
 #define rename test_rename
 #define ftruncate test_truncate
+""",
+                "logdiskf.h": """#pragma once
+#include <stdarg.h>
+void _logdiskf(const char *file, const char level, const char *format, ...);
+#define ERRORF(...) _logdiskf(__func__, 'E', __VA_ARGS__)
+#define WARNF(...) _logdiskf(__func__, 'W', __VA_ARGS__)
+#define NOTEF(...) _logdiskf(__func__, 'N', __VA_ARGS__)
 """,
             }
             for name, text in headers.items():
@@ -261,7 +272,10 @@ bool file_exists(const char *);
             playlist = (ROOT / "apps/playlist.c").read_text(encoding="utf-8")
             misc = (ROOT / "apps/misc.c").read_text(encoding="utf-8")
             abrepeat = (ROOT / "apps/abrepeat.h").read_text(encoding="utf-8")
-            extracted = [function(misc, "int read_line("), "#define open test_open\n" + function(misc, "int open_utf8(") + "\n#undef open", *(function(playlist, signature) for signature in (
+            extracted = ["#define read test_read\n" + function(misc, "int read_line(") + "\n#undef read",
+                         "#define open test_open\n#define read test_read\n#define write test_write\n#define close test_close\n"
+                         + function(misc, "int open_utf8(") + "\n#undef open\n#undef read\n#undef write\n#undef close",
+                         *(function(playlist, signature) for signature in (
                 "static int get_next_index(", "bool playlist_check(", "int playlist_next(",
                 "int playlist_get_repeat_mode(", "bool playlist_allow_dirplay(",
                 "int update_playlist_flags_unlocked(", "int playlist_set_single_track(",
@@ -280,13 +294,21 @@ bool file_exists(const char *);
                                       "static inline bool ab_repeat_mode_enabled("))
             harness = (Path(__file__).parent / "home-harness.c").read_text(encoding="utf-8")
             (work / "test.c").write_text(harness.replace("/* PRODUCTION_FUNCTIONS */", "\n\n".join(extracted)), encoding="utf-8")
-            executable = work / "home-test.exe"
             env = os.environ.copy()
             env["PATH"] = str(Path(gcc).parent) + os.pathsep + env["PATH"]
-            subprocess.run([gcc, "-std=c11", "-fwrapv", "-Wall", "-Wextra", "-Werror", "-include", str(work / "adapter.h"), "-I", str(work), "-I", str(ROOT / "apps"),
-                            str(ROOT / "apps/home_data.c"), str(ROOT / "apps/home_scores.c"),
-                            str(ROOT / "apps/home_autoplay.c"), str(ROOT / "apps/home_liked.c"), str(work / "test.c"), "-o", str(executable)], check=True, env=env)
-            subprocess.run([str(executable)], cwd=work, check=True, env=env)
+            sources = [str(ROOT / "apps/home_data.c"), str(ROOT / "apps/home_scores.c"),
+                       str(ROOT / "apps/home_autoplay.c"), str(ROOT / "apps/home_liked.c"),
+                       str(work / "test.c")]
+            for name, scanner in (("host", []),
+                                  ("firmware-scanner", [str(ROOT / "firmware/libc/sscanf.c")])):
+                run_dir = work / name
+                run_dir.mkdir()
+                executable = run_dir / "home-test.exe"
+                subprocess.run([gcc, "-std=c11", "-fwrapv", "-Wall", "-Wextra", "-Werror",
+                                "-include", str(work / "adapter.h"), "-I", str(work),
+                                "-I", str(ROOT / "apps"), *sources, *scanner,
+                                "-o", str(executable)], check=True, env=env)
+                subprocess.run([str(executable)], cwd=run_dir, check=True, env=env)
 
 
 if __name__ == "__main__":

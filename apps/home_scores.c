@@ -1,6 +1,8 @@
 /* Small append-only listening store; latest row per path wins.
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include <errno.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +12,7 @@
 #include "file.h"
 #include "fixedpoint.h"
 #include "kernel.h"
+#include "logdiskf.h"
 #include "misc.h"
 #include "timefuncs.h"
 
@@ -23,6 +26,20 @@ static off_t incomplete_offset = -1;
 static bool loaded, save_failed, index_complete;
 static struct mutex score_mutex;
 #define SCORE_LINE (MAX_PATH * 3 + 100)
+
+/* The disk logger flushes to HOME_DIR/rockbox_log.txt. Keep the syscall
+ * result and errno before close/rollback/cleanup can overwrite them. */
+static void score_log(const char *operation, long result, int error)
+{
+    ERRORF("%s result=%ld errno=%d", operation, result, error);
+}
+
+static void score_log_alloc(const char *operation, long result, int error,
+                            size_t bytes)
+{
+    ERRORF("%s result=%ld errno=%d bytes=%lu", operation, result, error,
+           (unsigned long)bytes);
+}
 
 static uint32_t hash_path(const char *path, uint32_t seed)
 {
@@ -94,14 +111,39 @@ static void escape_path(char *out, const char *path)
     *out = 0;
 }
 
+/* The firmware C library has no %u/%lu conversion and its %n count differs
+ * from the host library. Parse the fixed-width decimal fields explicitly. */
+static bool parse_decimal(char **cursor, uint32_t *value)
+{
+    char *start = *cursor;
+    if (*start < '0' || *start > '9')
+        return false;
+    errno = 0;
+    char *end;
+    unsigned long parsed = strtoul(start, &end, 10);
+    int error = errno;
+    if (end == start || error == ERANGE)
+        return false;
+#if ULONG_MAX > UINT32_MAX
+    if (parsed > UINT32_MAX)
+        return false;
+#endif
+    *cursor = end;
+    *value = parsed;
+    return true;
+}
+
 static bool parse_row(char *line, struct score_entry *entry, char *path)
 {
-    unsigned long score, updated, full, late, early;
-    int n = 0;
-    if (sscanf(line, "%lu\t%lu\t%lu\t%lu\t%lu\t%n",
-               &score, &updated, &full, &late, &early, &n) != 5 || !n)
-        return false;
-    char *src = line + n, *out = path;
+    uint32_t fields[5];
+    char *src = line;
+    for (int i = 0; i < 5; i++)
+    {
+        if (!parse_decimal(&src, &fields[i]) || *src != '\t')
+            return false;
+        src++;
+    }
+    char *out = path;
     while (*src && out < path + MAX_PATH - 1)
     {
         if (*src == '%')
@@ -119,19 +161,23 @@ static bool parse_row(char *line, struct score_entry *entry, char *path)
     *out = 0;
     if (*src || path[0] != '/')
         return false;
-    *entry = (struct score_entry){hash_path(path, 0), score, updated,
-                                  full, late, early, 0};
+    *entry = (struct score_entry){hash_path(path, 0), fields[0], fields[1],
+                                  fields[2], fields[3], fields[4], 0};
     return true;
 }
 
-static bool reserve_entry(void)
+static bool reserve_entry(const char *operation)
 {
     if (score_count < score_capacity)
         return true;
     int capacity = score_capacity ? score_capacity * 2 : 32;
-    int handle = core_alloc(capacity * sizeof(struct score_entry));
+    size_t bytes = (size_t)capacity * sizeof(struct score_entry);
+    int handle = core_alloc(bytes);
     if (handle <= 0)
+    {
+        score_log_alloc(operation, handle, errno, bytes);
         return false;
+    }
     if (score_handle > 0)
     {
         memcpy(core_get_data(handle), core_get_data(score_handle),
@@ -143,6 +189,7 @@ static bool reserve_entry(void)
     return true;
 }
 
+/* Returns an entry index, -1 when absent, or -2 after a storage error. */
 static int find_entry(int fd, const char *path)
 {
     bool own_fd = fd < 0;
@@ -152,11 +199,34 @@ static int find_entry(int fd, const char *path)
         struct score_entry entry = ((struct score_entry *)core_get_data(score_handle))[i];
         if (entry.hash != hash)
             continue;
-        if (fd < 0) fd = open(HOME_SCORES_FILE, O_RDONLY);
+        if (fd < 0)
+        {
+            fd = open(HOME_SCORES_FILE, O_RDONLY);
+            if (fd < 0)
+            {
+                int error = errno;
+                if (error != ENOENT)
+                    score_log("find-open", fd, error);
+                return error == ENOENT ? -1 : -2;
+            }
+        }
         char line[SCORE_LINE], saved[MAX_PATH];
-        if (fd >= 0 && lseek(fd, entry.offset, SEEK_SET) >= 0 &&
-            read_line(fd, line, sizeof(line)) > 0 &&
-            parse_row(line, &entry, saved) && !strcmp(saved, path))
+        if (lseek(fd, entry.offset, SEEK_SET) < 0)
+        {
+            int error = errno;
+            score_log("find-seek", -1, error);
+            if (own_fd) close(fd);
+            return -2;
+        }
+        int length = read_line(fd, line, sizeof(line));
+        if (length < 0)
+        {
+            int error = errno;
+            score_log("find-read", length, error);
+            if (own_fd) close(fd);
+            return -2;
+        }
+        if (length > 0 && parse_row(line, &entry, saved) && !strcmp(saved, path))
         {
             if (own_fd) close(fd);
             return i;
@@ -178,41 +248,95 @@ void home_scores_reload(void)
     incomplete_offset = -1;
     index_complete = true;
     int fd = open(HOME_SCORES_FILE, O_RDONLY);
-    if (fd < 0 && errno != ENOENT) index_complete = false;
+    int open_error = errno;
+    if (fd < 0 && open_error != ENOENT)
+    {
+        score_log("reload-open", fd, open_error);
+        index_complete = false;
+    }
     if (fd >= 0)
     {
         char line[SCORE_LINE], path[MAX_PATH];
         off_t offset = 0;
-        int length;
-        while ((length = read_line(fd, line, sizeof(line))) > 0)
+        while (true)
         {
+            int length = read_line(fd, line, sizeof(line));
+            if (!length)
+                break;
+            if (length < 0)
+            {
+                int error = errno;
+                score_log("reload-read", length, error);
+                index_complete = false;
+                break;
+            }
             off_t next = lseek(fd, 0, SEEK_CUR);
-            struct score_entry entry;
+            if (next < 0)
+            {
+                int error = errno;
+                score_log("reload-seek", (long)next, error);
+                index_complete = false;
+                break;
+            }
+            if (lseek(fd, next - 1, SEEK_SET) < 0)
+            {
+                int error = errno;
+                score_log("reload-seek", -1, error);
+                index_complete = false;
+                break;
+            }
             /* Ignore an incomplete final append. */
             char last;
-            lseek(fd, next - 1, SEEK_SET);
-            bool complete = read(fd, &last, 1) == 1 && last == '\n';
-            incomplete_offset = complete ? -1 : offset;
-            if (complete && parse_row(line, &entry, path))
+            int got = read(fd, &last, 1);
+            int read_error = errno;
+            if (got < 0)
             {
-                int i = find_entry(fd, path);
-                if (i < 0)
+                score_log("reload-read", got, read_error);
+                index_complete = false;
+                break;
+            }
+            bool complete = got == 1 && last == '\n';
+            incomplete_offset = complete ? -1 : offset;
+            if (complete)
+            {
+                struct score_entry entry;
+                if (parse_row(line, &entry, path))
                 {
-                    if (reserve_entry()) i = score_count++;
-                    else index_complete = false;
-                }
-                if (i >= 0)
-                {
+                    int i = find_entry(fd, path);
+                    if (i == -2)
+                    {
+                        index_complete = false;
+                        break;
+                    }
+                    if (i < 0)
+                    {
+                        if (!reserve_entry("reload-alloc"))
+                        {
+                            index_complete = false;
+                            break;
+                        }
+                        i = score_count++;
+                    }
                     entry.offset = offset;
                     ((struct score_entry *)core_get_data(score_handle))[i] = entry;
+                    score_rows++;
                 }
-                score_rows++;
             }
             offset = next;
-            lseek(fd, next, SEEK_SET);
+            if (lseek(fd, next, SEEK_SET) < 0)
+            {
+                int error = errno;
+                score_log("reload-seek", -1, error);
+                index_complete = false;
+                break;
+            }
         }
-        if (length < 0) index_complete = false;
-        close(fd);
+        if (close(fd) < 0)
+        {
+            int error = errno;
+            score_log("reload-close", -1, error);
+            index_complete = false;
+        }
     }
     if (!index_complete) save_failed = true;
     mutex_unlock(&score_mutex);
@@ -249,8 +373,11 @@ bool home_score_record(const char *path, uint32_t elapsed, uint32_t length,
         return false;
     }
     int fd = open(HOME_SCORES_FILE, O_RDWR | O_CREAT, 0666);
+    int open_error = errno;
     bool ok = false;
-    if (fd >= 0)
+    if (fd < 0)
+        score_log("record-open", fd, open_error);
+    else
     {
         /* Discard an interrupted final row before appending, so a truncated
          * path cannot become a new, apparently complete record next boot. */
@@ -258,7 +385,10 @@ bool home_score_record(const char *path, uint32_t elapsed, uint32_t length,
         {
             if (ftruncate(fd, incomplete_offset) < 0)
             {
-                close(fd);
+                int error = errno;
+                score_log("record-truncate", -1, error);
+                if (close(fd) < 0)
+                    score_log("record-close", -1, errno);
                 save_failed = true;
                 mutex_unlock(&score_mutex);
                 return false;
@@ -269,7 +399,7 @@ bool home_score_record(const char *path, uint32_t elapsed, uint32_t length,
         int i = find_entry(fd, path);
         if (i >= 0)
             entry = ((struct score_entry *)core_get_data(score_handle))[i];
-        if (i >= 0 || reserve_entry())
+        if (i != -2 && (i >= 0 || reserve_entry("record-alloc")))
         {
             int points = home_listen_points(elapsed, length, completed);
             entry.score = home_score_decay(entry.score, entry.updated, now);
@@ -285,18 +415,44 @@ bool home_score_record(const char *path, uint32_t elapsed, uint32_t length,
                              (unsigned long)entry.full, (unsigned long)entry.late,
                              (unsigned long)entry.early, escaped);
             off_t end = lseek(fd, 0, SEEK_END);
-            ok = end >= 0 && write(fd, line, n) == n && fsync(fd) == 0;
-            if (ok)
+            if (end < 0)
             {
-                entry.offset = end;
-                if (i < 0) i = score_count++;
-                ((struct score_entry *)core_get_data(score_handle))[i] = entry;
-                score_rows++;
+                int error = errno;
+                score_log("record-seek", (long)end, error);
             }
-            else if (end >= 0)
-                ftruncate(fd, end);
+            else
+            {
+                ssize_t wrote = write(fd, line, n);
+                int write_error = errno;
+                if (wrote != n)
+                    score_log("record-write", (long)wrote, write_error);
+                else if (fsync(fd) < 0)
+                {
+                    int error = errno;
+                    score_log("record-sync", -1, error);
+                }
+                else
+                    ok = true;
+                if (ok)
+                {
+                    entry.offset = end;
+                    if (i < 0) i = score_count++;
+                    ((struct score_entry *)core_get_data(score_handle))[i] = entry;
+                    score_rows++;
+                }
+                else if (ftruncate(fd, end) < 0)
+                {
+                    int error = errno;
+                    score_log("record-rollback", -1, error);
+                }
+            }
         }
-        if (close(fd) < 0) ok = false;
+        if (close(fd) < 0)
+        {
+            int error = errno;
+            score_log("record-close", -1, error);
+            ok = false;
+        }
     }
     if (!ok) save_failed = true;
     mutex_unlock(&score_mutex);
@@ -327,33 +483,91 @@ bool home_scores_compact(void)
     if (score_rows > score_count * 4 + 64)
     {
         int src = open(HOME_SCORES_FILE, O_RDONLY);
+        int src_error = errno;
+        if (src < 0)
+        {
+            score_log("compact-open-src", src, src_error);
+            ok = false;
+        }
         int dst = open(HOME_SCORES_FILE ".tmp", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        ok = src >= 0 && dst >= 0;
+        int dst_error = errno;
+        if (dst < 0)
+        {
+            score_log("compact-open-dst", dst, dst_error);
+            ok = false;
+        }
         off_t offset = 0;
         for (int i = 0; ok && i < score_count; i++)
         {
             struct score_entry entry = ((struct score_entry *)core_get_data(score_handle))[i];
             char line[SCORE_LINE] = "";
-            ok = lseek(src, entry.offset, SEEK_SET) >= 0 &&
-                 read_line(src, line, sizeof(line)) > 0;
-            size_t length = strlen(line);
-            if (ok) ok = write(dst, line, length) == (ssize_t)length && write(dst, "\n", 1) == 1;
-            if (ok)
+            if (lseek(src, entry.offset, SEEK_SET) < 0)
             {
-                ((struct score_entry *)core_get_data(score_handle))[i].offset = offset;
-                offset += length + 1;
+                int error = errno;
+                score_log("compact-seek", -1, error);
+                ok = false;
+                break;
             }
+            int length = read_line(src, line, sizeof(line));
+            if (length <= 0)
+            {
+                int error = errno;
+                score_log("compact-read", length, error);
+                ok = false;
+                break;
+            }
+            size_t size = strlen(line);
+            ssize_t wrote = write(dst, line, size);
+            int write_error = errno;
+            if (wrote != (ssize_t)size)
+            {
+                score_log("compact-write", (long)wrote, write_error);
+                ok = false;
+                break;
+            }
+            wrote = write(dst, "\n", 1);
+            write_error = errno;
+            if (wrote != 1)
+            {
+                score_log("compact-write", (long)wrote, write_error);
+                ok = false;
+                break;
+            }
+            ((struct score_entry *)core_get_data(score_handle))[i].offset = offset;
+            offset += size + 1;
         }
         if (dst >= 0)
         {
-            if (fsync(dst) < 0) ok = false;
-            if (close(dst) < 0) ok = false;
+            if (fsync(dst) < 0)
+            {
+                int error = errno;
+                score_log("compact-sync", -1, error);
+                ok = false;
+            }
+            if (close(dst) < 0)
+            {
+                int error = errno;
+                score_log("compact-close-dst", -1, error);
+                ok = false;
+            }
         }
-        if (src >= 0) close(src);
-        if (ok) ok = rename(HOME_SCORES_FILE ".tmp", HOME_SCORES_FILE) == 0;
+        if (src >= 0 && close(src) < 0)
+        {
+            int error = errno;
+            score_log("compact-close-src", -1, error);
+        }
+        if (ok && rename(HOME_SCORES_FILE ".tmp", HOME_SCORES_FILE) != 0)
+        {
+            int error = errno;
+            score_log("compact-rename", -1, error);
+            ok = false;
+        }
         if (!ok)
         {
-            remove(HOME_SCORES_FILE ".tmp");
+            int removed = remove(HOME_SCORES_FILE ".tmp");
+            int remove_error = errno;
+            if (removed < 0 && remove_error != ENOENT)
+                score_log("compact-remove", removed, remove_error);
             /* The mutex is recursive. Restore old offsets before releasing it. */
             home_scores_reload();
         }

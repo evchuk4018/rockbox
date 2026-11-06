@@ -4,6 +4,8 @@
 #include <limits.h>
 #include <ctype.h>
 #include <direct.h>
+#include <io.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -26,18 +28,52 @@
 #define BOM_UTF_8 "\xef\xbb\xbf"
 #undef write
 #undef open
+#undef read
+#undef close
 #undef fsync
 #undef rename
 #undef ftruncate
+
+#define FAILURE_LOG_SIZE 4096
+static char failure_log[FAILURE_LOG_SIZE];
+static size_t failure_log_size;
+static void clear_failure_log(void) { failure_log[0] = 0; failure_log_size = 0; }
+static bool failure_log_contains(const char *text) { return strstr(failure_log, text) != NULL; }
+void _logdiskf(const char *file, const char level, const char *format, ...)
+{
+    (void)file;
+    (void)level;
+    if (failure_log_size >= sizeof(failure_log) - 1)
+        return;
+    va_list ap;
+    va_start(ap, format);
+    int n = vsnprintf(failure_log + failure_log_size,
+                      sizeof(failure_log) - failure_log_size, format, ap);
+    va_end(ap);
+    if (n > 0)
+    {
+        size_t used = (size_t)n;
+        size_t room = sizeof(failure_log) - failure_log_size - 1;
+        failure_log_size += used < room ? used : room;
+        failure_log[failure_log_size] = 0;
+    }
+}
 
 static const char *disk_path(const char *path)
 { return !strncmp(path, "/Playlists", 10) ? path + 1 : path; }
 int test_mkdir(const char *path) { return _mkdir(disk_path(path)); }
 static int fail_write, fail_sync, fail_rename, rename_failure_countdown;
+static int fail_open, fail_read, fail_close, fail_alloc;
 static bool short_write;
 int test_open(const char *path, int flags, ...)
 {
+    if (fail_open) { errno = EACCES; return -1; }
     return _open(disk_path(path), flags | O_BINARY, 0666);
+}
+int test_read(int fd, void *data, size_t length)
+{
+    if (fail_read) { errno = EIO; return -1; }
+    return _read(fd, data, (unsigned int)length);
 }
 int test_write(int fd, const void *data, size_t length)
 {
@@ -45,9 +81,16 @@ int test_write(int fd, const void *data, size_t length)
     if (short_write && length > 1) return write(fd, data, length / 2);
     return write(fd, data, length);
 }
+int test_close(int fd)
+{
+    int result = _close(fd);
+    if (fail_close) { errno = EIO; return -1; }
+    return result;
+}
 int test_sync(int fd)
 {
-    return fail_sync ? -1 : _commit(fd);
+    if (fail_sync) { errno = EIO; return -1; }
+    return _commit(fd);
 }
 int test_rename(const char *old, const char *new)
 {
@@ -98,6 +141,7 @@ static size_t allocation_sizes[64], live_bytes, peak_bytes, largest_request;
 int core_alloc(size_t length)
 {
     if (length > largest_request) largest_request = length;
+    if (fail_alloc) { errno = ENOMEM; return -1; }
     for (int i = 1; i < 64; i++)
         if (!allocations[i])
         {
@@ -499,6 +543,215 @@ static void test_scores(void)
     remove(HOME_SCORES_FILE); home_scores_reload();
 }
 
+static void append_score_text(const char *text)
+{
+    int fd = test_open(HOME_SCORES_FILE, O_WRONLY | O_CREAT | O_APPEND);
+    assert(fd >= 0);
+    assert(write(fd, text, strlen(text)) == (int)strlen(text));
+    assert(!close(fd));
+}
+
+static void test_score_malformed(void)
+{
+    const uint32_t now = 10000000u;
+    const char *path = "/Music/Valid 歌曲%\t.mp3";
+    remove(HOME_SCORES_FILE);
+    home_scores_reload();
+    assert(home_score_record(path, 1000, 1000, true, now));
+    append_score_text("1\t2\t3\t4\t5 /Bad/space.mp3\n"
+                      "1\t2\t3\t4\t4294967296\t/Bad/overflow.mp3\n"
+                      "-1\t2\t3\t4\t5\t/Bad/negative.mp3\n"
+                      "1\t2\t3\t4\t5\tRelative/path.mp3\n"
+                      "1\t2\t3\t4\t5\t/Bad/%FFescape.mp3\n"
+                      "1\t2\t3\t4\t5\t\n");
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+    assert(home_score_get("/Bad/space.mp3", now) == 0);
+    assert(home_score_get("/Bad/overflow.mp3", now) == 0);
+    assert(home_score_get("/Bad/negative.mp3", now) == 0);
+    assert(home_score_get("/Bad/%FFescape.mp3", now) == 0);
+
+    const char *escaped = "/Music/line\nbreak.mp3";
+    assert(home_score_record(escaped, 500, 1000, false, now));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+    assert(home_score_get(escaped, now) == HOME_SCORE_ONE);
+    remove(HOME_SCORES_FILE);
+    home_scores_reload();
+}
+
+static void seed_failure_store(const char *path, uint32_t now)
+{
+    remove(HOME_SCORES_FILE);
+    home_scores_reload();
+    assert(home_score_record(path, 1000, 1000, true, now));
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+    home_scores_save_failed();
+}
+
+static void test_score_failures(void)
+{
+    const uint32_t now = 10000000u;
+    const char *path = "/Music/Failure 歌曲.mp3";
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_open = 1;
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    fail_open = 0;
+    assert(failure_log_contains("record-open"));
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_write = 1;
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    fail_write = 0;
+    assert(failure_log_contains("record-write"));
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    short_write = true;
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    short_write = false;
+    assert(failure_log_contains("record-write"));
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_sync = 1;
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    fail_sync = 0;
+    assert(failure_log_contains("record-sync"));
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_close = 1;
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    fail_close = 0;
+    assert(failure_log_contains("record-close"));
+    home_scores_reload();
+    assert(home_score_get(path, now) >= 2 * HOME_SCORE_ONE);
+
+    seed_failure_store(path, now);
+    for (int i = 0; i < 31; i++)
+    {
+        char extra[60];
+        snprintf(extra, sizeof(extra), "/Music/Failure fill %d.mp3", i);
+        assert(home_score_record(extra, 1000, 1000, true, now));
+    }
+    clear_failure_log();
+    fail_alloc = 1;
+    assert(!home_score_record("/Music/Alloc failure.mp3", 1000, 1000, true, now));
+    fail_alloc = 0;
+    assert(failure_log_contains("record-alloc"));
+    assert(failure_log_contains("bytes="));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_open = 1;
+    home_scores_reload();
+    fail_open = 0;
+    assert(failure_log_contains("reload-open"));
+    char original_log[FAILURE_LOG_SIZE];
+    strcpy(original_log, failure_log);
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    assert(!strcmp(original_log, failure_log));
+    assert(home_scores_save_failed());
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_read = 1;
+    home_scores_reload();
+    fail_read = 0;
+    assert(failure_log_contains("reload-read"));
+    strcpy(original_log, failure_log);
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    assert(!strcmp(original_log, failure_log));
+    assert(home_scores_save_failed());
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+
+    seed_failure_store(path, now);
+    clear_failure_log();
+    fail_alloc = 1;
+    home_scores_reload();
+    fail_alloc = 0;
+    assert(failure_log_contains("reload-alloc"));
+    assert(failure_log_contains("bytes="));
+    strcpy(original_log, failure_log);
+    assert(!home_score_record(path, 1000, 1000, true, now));
+    assert(!strcmp(original_log, failure_log));
+    assert(home_scores_save_failed());
+    home_scores_reload();
+    assert(home_score_get(path, now) == 2 * HOME_SCORE_ONE);
+
+    seed_failure_store(path, now);
+    for (int i = 0; i < 70; i++)
+        assert(home_score_record(path, 1000, 1000, true, now));
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_open = 1;
+    assert(!home_scores_compact());
+    fail_open = 0;
+    assert(failure_log_contains("compact-open-src"));
+    assert(failure_log_contains("compact-open-dst"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_read = 1;
+    assert(!home_scores_compact());
+    fail_read = 0;
+    assert(failure_log_contains("compact-read"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_write = 1;
+    assert(!home_scores_compact());
+    fail_write = 0;
+    assert(failure_log_contains("compact-write"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_sync = 1;
+    assert(!home_scores_compact());
+    fail_sync = 0;
+    assert(failure_log_contains("compact-sync"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_close = 1;
+    assert(!home_scores_compact());
+    fail_close = 0;
+    assert(failure_log_contains("compact-close-dst"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    fail_rename = 1;
+    assert(!home_scores_compact());
+    fail_rename = 0;
+    assert(failure_log_contains("compact-rename"));
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+
+    clear_failure_log();
+    assert(home_scores_compact());
+    assert(!failure_log[0]);
+    home_scores_reload();
+    assert(home_score_get(path, now) == 142 * HOME_SCORE_ONE);
+    remove(HOME_SCORES_FILE);
+    home_scores_reload();
+}
+
 static void test_autoplay(void)
 {
     home_autoplay_init();
@@ -699,8 +952,9 @@ static void active_pool(char *name)
     int fd = test_open(current_playlist.filename, O_RDONLY);
     assert(fd >= 0 && read_line(fd, header, sizeof(header)) > 0);
     close(fd);
-    char slot;
-    assert(sscanf(header, "#HOME-POOL:%c", &slot) == 1);
+    const char *marker = strstr(header, "#HOME-POOL:");
+    assert(marker && marker[11] && marker[12] == 0);
+    char slot = marker[11];
     snprintf(name, MAX_PATH, "./home-autoplay-pool-%c", slot);
 }
 
@@ -960,6 +1214,8 @@ int main(void)
     test_pins();
     test_playback();
     test_scores();
+    test_score_malformed();
+    test_score_failures();
     test_autoplay();
     test_batches_and_resume();
     test_batch_weights();

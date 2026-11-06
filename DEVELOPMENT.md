@@ -61,12 +61,26 @@ logarithm, and actual playlist progression functions with small Windows host
 adapters. They cover genre/track uniqueness, whole-library genre matching,
 Unicode paths, refresh/navigation, pins, repeat modes, continuous autoplay,
 scoring thresholds and session ownership, duplicate finish events, decay,
-restart persistence, partial/failed writes, compaction failures, weighted
-selection, 20/20/5 batching without repeats, skipped versus unreached tracks,
-legacy queue adoption, and 850/5,000-track memory checks. They also cover playlist-backed likes, relative/Unicode/case-sensitive paths,
-duplicate removal and save failures, custom short/long button events for Clip
-and Clip+, unchanged Clip v2 button behavior,
-and deferred genre changes through production playlist look-ahead and progression.
+restart persistence, malformed/interrupted rows, injected open/read/allocation/
+write/sync/close/rename failures, compaction failures, weighted selection,
+20/20/5 batching without repeats, skipped versus unreached tracks, legacy queue
+adoption, and 850/5,000-track memory checks. They also cover playlist-backed
+likes, relative/Unicode/case-sensitive paths, duplicate removal and save
+failures, custom short/long button events for Clip and Clip+, unchanged Clip v2
+button behavior, and deferred genre changes through production playlist
+look-ahead and progression. The native harness runs twice: once with the host C
+library and once with the firmware scanner (`firmware/libc/sscanf.c`) linked in.
+
+The firmware C library does not implement `%u` or `%lu` conversions and its
+`%n` offset differs from the host library. The score reader therefore parses
+the five decimal fields with checked `strtoul` calls, requires tab separators,
+and rejects values above `uint32_t`; do not reintroduce `sscanf` for score rows.
+Home score I/O failures are written through Rockbox's disk logger to
+`/rockbox_log.txt` on the player. Each entry names the failing operation and
+records the return value and saved `errno`; allocation failures also include the
+requested byte count. After reconnecting the player, inspect that log before
+treating a score warning as explained.
+
 The adapters supply the database, metadata and audio events; the checks do not drive GUI or audio playback.
 
 The existing regression checks run in the MSYS2 UCRT64 environment:
