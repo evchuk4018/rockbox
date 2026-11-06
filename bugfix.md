@@ -8,13 +8,16 @@ disk log. The ARM firmware and the Windows simulator both build, the native
 Home suite passes with the host C library and with the firmware scanner linked
 in, and the Clip+ package was installed and hash-verified.
 
-The missing `/.rockbox/home-scores.tsv` and the user-visible warning cannot yet
-be attributed to a specific device operation. The old code hid the failing
-operation; this build records it for the next hardware run. The parser defect
-explains why previously written scores would fail to reload, not why the first
-file creation failed.
+The next hardware run identified the boot/save warning in `/rockbox_log.txt`:
+`E [score_log]reload-open result=-73 errno=9`. A missing score file correctly
+returns the native "not found" result, but the file-open wrapper closes a stream
+already destroyed by its inner routine. That cleanup replaces `ENOENT` with
+`EBADF` (9). Home treats this as a failed initial load, marks its index
+incomplete, and rejects every subsequent save. The native open wrapper now
+preserves the original error across cleanup; Home's protection against writing
+an incomplete index remains in place.
 
-## Root cause
+## Parser defect
 
 `apps/home_scores.c` used:
 
@@ -23,9 +26,9 @@ sscanf(line, "%lu\t%lu\t%lu\t%lu\t%lu\t%n", ...)
 ```
 
 Rockbox's firmware scanner in `firmware/libc/sscanf.c` has no `%u`/`%lu`
-conversion and its `%n` position differs from the host C library. A valid row
-therefore failed to reload on the device even though the same row parsed in the
-simulator.
+conversion and its `%n` assignment count differs from the host C library. A
+valid row therefore failed to reload on the device even though the same row
+parsed in the simulator.
 
 ## Changes
 
@@ -44,10 +47,32 @@ simulator.
   logged again, so the original failure appears once.
 - Updated `DEVELOPMENT.md` with the firmware scanner limitation and the
   `/rockbox_log.txt` location.
+- Preserved `errno` across failed native-open cleanup in `firmware/common/file.c`.
+  A regression compiles the actual open/close wrapper and checks missing files,
+  other open failures, descriptor exhaustion, invalid flags, and successful reuse.
+
+## Internal-drive filesystem warning
+
+A read-only Windows check on November 6 found the internal FAT16 volume marked
+dirty, an invalid first cluster for `.rockbox/langs/ukrainian.lng`, and one
+32 KiB lost chain. The microSD volume was not marked dirty. These filesystem
+errors explain Windows' drive warning; they do not change the traced `errno`
+bug above. Before repair, the entire 1,946,157,056-byte internal volume was
+imaged and its SHA256 verified under
+`C:\RockboxDev\logs\score-recovery-20261106\internal-before-repair.img`.
+
+`chkdsk D: /f /x` corrected the invalid language-file entry and recovered the
+lost chain as a file. The language file was restored from the verified firmware
+package. A post-install read-only `chkdsk D:` returned 0 and found no problems;
+both D: and E: reported "NOT Dirty". The microSD was not modified.
 
 ## Verification
 
-Local host checks (`python tools/windows-simulator/tests/test-home.py`) pass.
+All six checks in `tools/windows-simulator/tests/test-home.py` passed. Two
+generated executable launches initially encountered Windows Application Control;
+both passed on an ordinary retry without changing policy. The new native-open
+regression failed against the original routine and passed with the five-line
+cleanup fix.
 The harness now runs twice: once with the host C library and once with
 `firmware/libc/sscanf.c` linked in. Coverage includes:
 
@@ -58,39 +83,45 @@ The harness now runs twice: once with the host C library and once with
   failures, with the expected logged stage and older records preserved;
 - compaction failure and recovery, followed by a successful compaction.
 
-The Windows simulator rebuilt successfully.
+The Windows simulator rebuilt successfully for the earlier parser fix. The
+native filesystem change is checked by the new wrapper regression and the ARM
+build; the simulator uses a different filesystem backend.
 
 The Clip+ ARM firmware was rebuilt in the homelab Docker toolchain with two
 jobs:
 
 ```text
 Target: sansaclipplus
-Version: 2679012cb1-261106
-Binary size: 993396
+Version: d3594414a5-261106
+Binary size: 993412
 rockbox.zip SHA256:
-0bad8cfc33c8e4d7f8e4b0d069f9ad431e2a78b48e96d853767ab036cffee087
+99213a44268a90fbbb2a36574f53ef1b63258e685829ff68c5e6e42ecae036e8
 rockbox.sansa SHA256:
-64332ff9893a14d20265c16e289e629f70f60b8c1f49f8abfd39da77fb8079fc
+4ce02311d8b5538af535de9583b29d1ad44e45434fc19e3e3cc51cf1b8d3422f
 ```
 
 ## Device delivery
 
-Player backup:
-`C:\RockboxDev\logs\device-transfer-20261106`
+Current backup, original error log, build log, CHKDSK results, installed-file
+hashes, and transfer manifest:
+`C:\RockboxDev\logs\score-recovery-20261106`
 
-The backup contains the previous `D:\.rockbox` (except the unreadable
-`database_tmp.tcd` temporary file), internal playlists, card playlists, and
-`version.sdk`. Settings, pins, database indexes, resume state, autoplay queue,
-and pool were preserved.
+The full volume image preserves the pre-repair filesystem, including damaged
+entries. Earlier file backups, including internal/card playlists, remain under
+`C:\RockboxDev\logs\device-transfer-20261106`.
 
 Installed package:
-`C:\RockboxDev\logs\device-transfer-20261106\rockbox.zip`
+`C:\RockboxDev\logs\score-recovery-20261106\rockbox.zip`
 
-Extracted to `D:\`; all 342 package files matched their SHA256 values after
-installation. `D:\.rockbox\rockbox-info.txt` reports
-`Version: 2679012cb1-261106`. The installed `rockbox.sansa` hash matches the
-build above. The firmware contains the new operation strings, including
-`record-open`, `reload-read`, `record-alloc`, and `rockbox_log.txt`.
+Only changed build files and the damaged language resource were written to
+`D:\`. All 342 package files matched their SHA256 values after installation;
+38 configuration, playlist, database, resume, and queue files were hash-checked
+and unchanged. `D:\.rockbox\rockbox-info.txt` reports
+`Version: d3594414a5-261106`. The installed `rockbox.sansa` hash matches the
+build above, and the volume's write buffers were flushed.
+
+The old `/rockbox_log.txt` was archived locally and removed from the player so
+any new log describes the corrected build. No score file was pre-created.
 
 At the end of the USB session, `/.rockbox/home-scores.tsv` and
 `/rockbox_log.txt` were still absent because no playback had occurred since
@@ -100,15 +131,17 @@ installation. This is expected before the first successful save.
 
 These require physical use and were not performed during the USB session:
 
-1. Start a Home recommendation, return Home while playback continues, then
+1. Confirm the player boots without the score warning. Its previous log dates
+   were in 2100; set the correct player date/time for score decay.
+2. Start a Home recommendation, return Home while playback continues, then
    confirm returning Home alone does not credit or stop the play.
-2. Stop after half the track and confirm one point; let a track finish and
+3. Stop after half the track and confirm one point; let a track finish and
    confirm two points.
-3. Switch Quickplay sessions and confirm scores continue without mixing queues.
-4. Restart the player and confirm scores and counters reload.
-5. Reconnect USB and inspect `/.rockbox/home-scores.tsv` and
+4. Switch Quickplay sessions and confirm scores continue without mixing queues.
+5. Restart the player and confirm scores and counters reload.
+6. Reconnect USB and inspect `/.rockbox/home-scores.tsv` and
    `/rockbox_log.txt`.
 
-The save warning is explained only if a new `/rockbox_log.txt` entry names the
-failing operation, or if this build visibly saves and reloads scores on the
-player. Until then the device-side cause remains open.
+The original boot/save warning is now traced to native-open cleanup replacing
+`ENOENT` with `EBADF`. Successful saving and reloading with the corrected native
+open routine still requires the hardware steps above.
