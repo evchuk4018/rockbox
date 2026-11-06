@@ -178,6 +178,70 @@ int main(void)
                                 f"-D{target}", str(source), "-o", str(executable)], check=True)
                 subprocess.run([str(executable)], check=True)
 
+    def test_native_open_preserves_errno(self):
+        native = (ROOT / "firmware/common/file.c").read_text(encoding="utf-8")
+        internal = (ROOT / "firmware/include/file_internal.h").read_text(encoding="utf-8")
+        error_macros = internal[internal.index("#define ERRNO 0"):internal.index("/** Misc. stuff **/")]
+        code = r"""#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#define MAX_OPEN_FILES 1
+#define DEBUGF(...) ((void)0)
+/* FLAGS_AND_ERRORS */
+struct filestr_desc { struct { unsigned int flags; } stream; };
+static struct filestr_desc open_streams[MAX_OPEN_FILES];
+static int open_error;
+static void file_internal_lock_WRITER(void) {}
+static void file_internal_unlock_WRITER(void) {}
+static int close_internal(struct filestr_desc *file)
+{ file->stream.flags = 0; return 0; }
+static int open_internal_inner2(const char *path, struct filestr_desc *file,
+                                unsigned int callflags, int oflag)
+{
+    (void)path; (void)callflags; (void)oflag;
+    /* Failed native opens already destroy the stream before returning. */
+    file->stream.flags = open_error ? 0 : FDO_BUSY;
+    if (open_error) { errno = open_error; return -7; }
+    return 0;
+}
+/* NATIVE_FUNCTIONS */
+int main(void)
+{
+    const int errors[] = {ENOENT, EIO, EACCES, ENOTDIR};
+    for (unsigned int i = 0; i < sizeof(errors) / sizeof(*errors); i++)
+    {
+        open_error = errors[i]; errno = 0;
+        assert(open_internal_inner1("/.rockbox/home-scores.tsv", O_RDONLY, 0) == -73);
+        assert(errno == errors[i]);
+        assert(!open_streams[0].stream.flags);
+    }
+    errno = 0;
+    assert(open_internal_inner1("/invalid", O_RDONLY | O_TRUNC, 0) == -2);
+    assert(errno == EINVAL);
+    open_streams[0].stream.flags = FDO_BUSY;
+    assert(open_internal_inner1("/busy", O_RDONLY, 0) == -1);
+    assert(errno == EMFILE);
+    open_streams[0].stream.flags = 0; open_error = 0;
+    assert(open_internal_inner1("/created", O_RDWR | O_CREAT, 0) == 0);
+    assert(open_streams[0].stream.flags == FDO_BUSY);
+    assert(rbfs_close(0) == 0);
+    assert(rbfs_close(0) == -2 && errno == EBADF);
+    return 0;
+}
+"""
+        code = code.replace("/* FLAGS_AND_ERRORS */",
+                            function(internal, "enum fildes_and_obj_flags") + ";\n" + error_macros)
+        code = code.replace("/* NATIVE_FUNCTIONS */", "\n\n".join(
+            function(native, signature) for signature in (
+                "static int alloc_filestr(", "int rbfs_close(", "static int open_internal_inner1(")))
+        with tempfile.TemporaryDirectory(prefix="rockbox-native-open-") as directory:
+            work = Path(directory)
+            source, executable = work / "open.c", work / "open.exe"
+            source.write_text(code, encoding="utf-8")
+            subprocess.run(["C:/msys64/ucrt64/bin/gcc.exe", "-std=gnu11", "-Wall", "-Wextra",
+                            "-Werror", str(source), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
+
     def test_native_home_and_playback(self):
         bundled_gcc = Path("C:/msys64/ucrt64/bin/gcc.exe")
         gcc = str(bundled_gcc) if bundled_gcc.is_file() else shutil.which("gcc")

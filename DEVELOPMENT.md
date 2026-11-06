@@ -72,7 +72,7 @@ look-ahead and progression. The native harness runs twice: once with the host C
 library and once with the firmware scanner (`firmware/libc/sscanf.c`) linked in.
 
 The firmware C library does not implement `%u` or `%lu` conversions and its
-`%n` offset differs from the host library. The score reader therefore parses
+`%n` assignment count differs from the host library. The score reader therefore parses
 the five decimal fields with checked `strtoul` calls, requires tab separators,
 and rejects values above `uint32_t`; do not reintroduce `sscanf` for score rows.
 Home score I/O failures are written through Rockbox's disk logger to
@@ -80,6 +80,11 @@ Home score I/O failures are written through Rockbox's disk logger to
 records the return value and saved `errno`; allocation failures also include the
 requested byte count. After reconnecting the player, inspect that log before
 treating a score warning as explained.
+
+The native file-open regression also compiles the production open/close wrapper.
+A failed open can already have destroyed its stream; cleanup must preserve the
+original `errno` instead of replacing `ENOENT` with `EBADF`. Otherwise a missing
+score file makes the initial index incomplete and blocks all subsequent saves.
 
 The adapters supply the database, metadata and audio events; the checks do not drive GUI or audio playback.
 

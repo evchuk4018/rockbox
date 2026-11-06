@@ -507,7 +507,12 @@ static int open_internal_inner1(const char *path, int oflag,
 
 file_error:
     if (fildes >= 0)
+    {
+        /* Cleanup can encounter a stream already destroyed by the failed open. */
+        int error = errno;
         rbfs_close(fildes);
+        errno = error;
+    }
     return rc;
 }
 
