@@ -1,0 +1,16 @@
+Rockbox Manager is part of Rockbox and is distributed under GPL-2.0-or-later.
+See the repository's docs/COPYING file for its license.
+
+TagLibSharp 2.3.0
+Copyright the TagLib# contributors. Licensed under LGPL-2.1-or-later.
+Source and license: https://github.com/mono/taglib-sharp
+The exact source is the 2.3.0 release. The embedded managed assembly can be rebuilt
+from that source and this application's source, available in the same repository.
+
+.NET 10 and System.Management
+Copyright .NET Foundation and Contributors. Licensed under the MIT license.
+Source, license and notices: https://github.com/dotnet/runtime
+https://github.com/dotnet/wpf
+
+Dependencies are restored from NuGet. The published application embeds managed
+assemblies and extracts bundled native runtime components on startup.

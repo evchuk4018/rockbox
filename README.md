@@ -1,5 +1,8 @@
 # Rockbox on Windows
 
+The portable **Rockbox Manager** desktop app manages the Clip+ library, mirrored
+playlists, likes, and Home pin order. See [its usage and build guide](utils/rockbox-manager/README.md).
+
 Native Windows simulator setup for the **original SanDisk Sansa Clip v1**:
 Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The connected physical
 player was identified on November 5, 2026 as a **Sansa Clip+**, target
