@@ -264,6 +264,36 @@ names, and modification times. Import manifests and verification results are
 local, ignored files under `logs\music-import-20261105`. There is no scheduled
 sync or homelab service change.
 
+## Pending album transfer
+
+Prepared November 6, 2026: **TV Girl - Who Really Cares**, all ten tracks in
+album order, including **Song About Me (feat. Maddie Acid)**. The clean album
+audio came from [TV Girl's official Bandcamp release](https://tvgirl.bandcamp.com/album/who-really-cares)
+using yt-dlp, without video intros, outros, artwork, or extra tracks.
+
+The local album is `C:\RockboxDev\MusicLibrary\TV Girl\Who Really Cares`.
+Both existing transfer trees contain `Playlists\TV Girl - Who Really Cares.m3u8`
+and its matching `M\TV Girl\Who Really Cares` folder:
+
+- `C:\RockboxDev\RockboxCardReady`: original 128 kbps MP3 audio, about 34 MiB.
+- `C:\RockboxDev\RockboxInternalReady`: compact 64 kbps VBR Opus audio,
+  about 17 MiB, matching the internal storage preparation.
+
+A simulator playlist uses the existing `MusicLibrary` junction. All ten tracks
+in each format passed full decoding, artist/album tag checks, source-duration
+checks, and playlist path validation. The local verification record and source
+metadata are under `C:\RockboxDev\logs\tv-girl-who-really-cares-20261106`.
+
+No player was mounted during preparation. On the next connection, identify the
+Clip+ internal drive using `version.sdk` and identify any separate microSD
+volume; drive letters can change. Copy only the new album folder and matching
+playlist from the appropriate transfer tree into the same paths on the chosen
+volume. Existing playlists, likes, listening scores, pins, and firmware do not
+need replacing. After ejecting, open **Settings → Playlists → TV Girl - Who
+Really Cares**. Use database **Update Now** if the new album should also appear
+in database browsing and Home genre autoplay. Transfer and physical playback
+remain pending. `C:\RockboxDev\NEXT-TRANSFER.md` records the local handoff.
+
 ## Build cleanup
 
 `clean.ps1 -WhatIf` previews cleanup; `clean.ps1` removes generated output while
