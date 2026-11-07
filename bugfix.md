@@ -169,3 +169,12 @@ allocations, and runs for both Clip RAM sizes. The old allocator reproduces
 regression/build logs and installation hashes are under
 `C:\RockboxDev\logs\playback-panic-20261107`. Physical playback after USB
 disconnection remains a user check.
+
+Installed Clip+ build **6f74a3d25a-261107** on November 7. All 336 installed
+build files match the package; 69 personal files, including both volumes'
+playlists and the database/score/resume data, match their backups. All 802
+database paths resolve, including PRIDE. The internal filesystem passes the
+post-install CHKDSK check and both volumes report not dirty. The seven focused
+checks pass; the old-allocator and old-empty-commit negative controls each fail
+as expected. The source fix is pushed to the user's `main` branch. Safely eject
+both volumes, disconnect USB and restart before the physical playback check.
