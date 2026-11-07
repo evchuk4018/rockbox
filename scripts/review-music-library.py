@@ -125,7 +125,9 @@ def candidates(data, row):
             kind = group.get("primary-type")
             if kind not in {"Album", "EP", "Single"}:
                 continue
-            release_artists = release.get("artist-credit", [])
+            # Search results omit redundant release credits for many albums.
+            # The complete release is fetched and checked before any write.
+            release_artists = release.get("artist-credit") or recording.get("artist-credit", [])
             if not release_artists or any(c["artist"]["name"] == "Various Artists" for c in release_artists):
                 continue
             date = release.get("date", "9999")
@@ -135,7 +137,7 @@ def candidates(data, row):
     return sorted(result, key=lambda item: item[0])
 
 
-def research(rows, directory):
+def research(rows, directory, retry=False):
     client = MusicBrainz(directory / "cache")
     output = directory / "review.json"
     reviews = json.loads(output.read_text(encoding="utf-8")) if output.exists() else {}
@@ -145,7 +147,7 @@ def research(rows, directory):
             key = norm(row["artist"]) + "|" + norm(row["title"])
             grouped.setdefault(key, []).append(row)
     for i, (key, copies) in enumerate(grouped.items()):
-        if key in reviews:
+        if key in reviews and (not retry or reviews[key].get("status") == "verified"):
             continue
         row = copies[0]
         review = {"artist": row["artist"], "title": row["title"], "status": "unresolved",
@@ -159,6 +161,11 @@ def research(rows, directory):
                 _, recording, release = matches[0]
                 # Full release data supplies verified disc and track positions.
                 full, release_source = client.get("release/" + release["id"], inc="recordings+artist-credits+release-groups")
+                if full.get("release-group", {}).get("secondary-types") or any(
+                        item["artist"]["name"] == "Various Artists" for item in full.get("artist-credit", [])):
+                    reviews[key] = review
+                    save(output, reviews)
+                    continue
                 positions = [(m, t) for m in full.get("media", []) for t in m.get("tracks", [])
                              if t.get("recording", {}).get("id") == recording["id"]]
                 if len(positions) == 1:
@@ -194,6 +201,8 @@ def refine_cached(rows, directory):
     album also identifies guest credits without splitting punctuation in names.
     """
     reviews = json.loads((directory / "review.json").read_text(encoding="utf-8"))
+    overrides_path = directory / "identity-overrides.json"
+    overrides = json.loads(overrides_path.read_text(encoding="utf-8")) if overrides_path.exists() else {}
     aliases = {}
     releases = []
 
@@ -246,17 +255,20 @@ def refine_cached(rows, directory):
         if "error" in row:
             continue
         key = norm(row["artist"]) + "|" + norm(row["title"])
+        identity = overrides.get(key, {})
+        lookup_artist = identity.get("artist", row["artist"])
+        lookup_title = identity.get("title", row["title"])
         previous = reviews.get(key, {})
         matches = []
-        for candidate in index.get(title_key(row["title"]), []):
+        for candidate in index.get(title_key(lookup_title), []):
             rank, release, media, track, recording, length, names, description = candidate
             if abs(length - row["duration_ms"]) > 3500 or bool(VARIANTS.search(row["title"])) != bool(VARIANTS.search(description)):
                 continue
-            local = aliases.get(norm(row["artist"]), norm(row["artist"]))
+            local = aliases.get(norm(lookup_artist), norm(lookup_artist))
             known = [norm(item["artist"]["name"]) for item in names + release["artist-credit"]]
             # Match entire canonical names, or a known primary credit followed
             # by guest credits. Never split a name such as Tyler, The Creator.
-            if local not in known and not any(norm(row["artist"]).startswith(name + " ") for name in known):
+            if local not in known and not any(norm(lookup_artist).startswith(name + " ") for name in known):
                 continue
             matches.append(candidate)
         if not matches:
@@ -272,7 +284,7 @@ def refine_cached(rows, directory):
                                  "album": [release["title"]], "discnumber": [str(media["position"])],
                                  "tracknumber": [str(track["position"])]},
                         "sources": ["https://musicbrainz.org/release/" + release["id"],
-                                    "https://musicbrainz.org/recording/" + recording["id"]],
+                                    "https://musicbrainz.org/recording/" + recording["id"], *identity.get("sources", [])],
                         "method": "Full release tracklist, artist credit, version and duration reviewed"}
     save(directory / "review-refined.json", reviews)
     print(json.dumps({"reviewed": len(reviews), "verified": sum(r["status"] == "verified" for r in reviews.values())}))
@@ -293,6 +305,9 @@ def apply(rows, reviews, directory):
         desired = review["tags"]
         if all(list(audio.tags.get(k, [])) == v for k, v in desired.items()):
             continue
+        current = {k: list(audio.tags.get(k, [])) for k in FIELDS}
+        if current != row["tags"] or abs(round(audio.info.length * 1000) - row["duration_ms"]) > 10:
+            raise RuntimeError(f"File changed since inventory; review it again: {path}")
         identity = hashlib.sha256(str(path).encode()).hexdigest()
         backup = directory / "originals" / (identity + path.suffix)
         before = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -324,7 +339,7 @@ def apply(rows, reviews, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["inventory", "research", "refine", "apply"])
+    parser.add_argument("command", choices=["inventory", "research", "retry", "refine", "apply"])
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--root", type=Path, action="append")
     parser.add_argument("--review", type=Path)
@@ -336,8 +351,8 @@ def main():
         print(json.dumps({"files": len(rows), "errors": sum("error" in r for r in rows)}))
     else:
         rows = json.loads(inventory_path.read_text(encoding="utf-8"))
-        if args.command == "research":
-            research(rows, args.work)
+        if args.command in {"research", "retry"}:
+            research(rows, args.work, retry=args.command == "retry")
         elif args.command == "refine":
             refine_cached(rows, args.work)
         else:

@@ -55,12 +55,34 @@ class TagTests(unittest.TestCase):
                                    "artist-credit": [{"artist": {"name": "Artist"}}],
                                    "release-group": {"primary-type": "Album"}}]}
         self.assertEqual(len(review.candidates({"recordings": [recording]}, row)), 1)
+        recording["releases"][0].pop("artist-credit")
+        self.assertEqual(len(review.candidates({"recordings": [recording]}, row)), 1)
         recording["disambiguation"] = "live"
         self.assertEqual(review.candidates({"recordings": [recording]}, row), [])
         recording.pop("disambiguation")
         recording["length"] = 220000
         self.assertEqual(review.candidates({"recordings": [recording]}, row), [])
         self.assertEqual(review.primary("Tyler, The Creator"), "Tyler, The Creator")
+
+    def test_reviewed_identity_uses_release_tracklist_and_keeps_unresolved(self):
+        with tempfile.TemporaryDirectory(prefix="rockbox-tag-review-") as directory:
+            root = Path(directory)
+            credit = [{"name": "Artist", "artist": {"name": "Artist"}}]
+            release = {"id": "release", "title": "Original Album", "date": "2000", "status": "Official",
+                       "artist-credit": credit, "release-group": {"primary-type": "Album"},
+                       "media": [{"position": 1, "tracks": [{"position": 3, "title": "Song", "length": 200000,
+                                  "artist-credit": credit, "recording": {"id": "recording", "title": "Song"}}]}]}
+            review.save(root / "cache/release.json", release)
+            review.save(root / "review.json", {"uploader|artist song": {"status": "unresolved"},
+                                                "unknown|unknown": {"status": "unresolved"}})
+            review.save(root / "identity-overrides.json", {"uploader|artist song": {
+                "artist": "Artist", "title": "Song", "sources": ["reviewed artist source"]}})
+            rows = [{"artist": "Uploader", "title": "Artist - Song", "duration_ms": 200000, "path": "a.mp3"},
+                    {"artist": "Unknown", "title": "Unknown", "duration_ms": 200000, "path": "b.mp3"}]
+            review.refine_cached(rows, root)
+            results = json.loads((root / "review-refined.json").read_text(encoding="utf-8"))
+            self.assertEqual(results["uploader|artist song"]["tags"]["tracknumber"], ["3"])
+            self.assertEqual(results["unknown|unknown"]["status"], "unresolved")
 
 
 if __name__ == "__main__":
