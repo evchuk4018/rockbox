@@ -1,27 +1,20 @@
-using System.Text;
-
 namespace RockboxManager.Core;
 
 public sealed class EditSession
 {
+    // Kept as a permitted legacy recovery target; new batches never write it.
     public const string PinsPath = ".rockbox/home-pins.txt";
     public PlayerDevice Device { get; }
     public List<PlaylistDraft> Playlists { get; } = [];
-    public List<HomePin> Pins { get; private set; } = [];
-    public FileSnapshot PinsSnapshot { get; private set; }
-    private readonly List<HomePin> originalPins = [];
-    private readonly List<string> originalPinPaths = [];
     public SyncBatch? PendingBatch { get; set; }
     public IEnumerable<PlaylistDraft> VisiblePlaylists => Playlists.Where(p => !p.Deleted);
     public PlaylistDraft Liked => Playlists.Single(p => p.IsLiked);
-    public bool PinsChanged => !RenderedPins().SequenceEqual(originalPinPaths);
-    public int ChangedCount => Playlists.Count(p => p.IsDirty) + (PinsChanged ? 1 : 0);
+    public int ChangedCount => Playlists.Count(p => p.IsDirty);
     public bool IsDirty => ChangedCount > 0;
 
     private EditSession(PlayerDevice device)
     {
         Device = device;
-        PinsSnapshot = FileSnapshot.Read(device, Storage.Internal, PinsPath);
     }
 
     public static EditSession Load(PlayerDevice device)
@@ -60,28 +53,8 @@ public sealed class EditSession
             }
         }
         if (!session.Playlists.Any(p => p.IsLiked)) session.Playlists.Insert(0, new("Liked Songs", [], liked: true));
-        var pinFile = device.FilePath(Storage.Internal, PinsPath);
-        if (File.Exists(pinFile))
-        {
-            foreach (var path in File.ReadAllLines(pinFile, Encoding.UTF8).Select(s => s.Trim()).Where(s => s.StartsWith('/')))
-            {
-                var resolved = PlaylistCodec.Resolve(path, Storage.Internal, PinsPath);
-                var playlist = session.Playlists.FirstOrDefault(p => p.Copies.Values.Any(copy =>
-                    copy.Storage == resolved.Storage && copy.RelativePath == resolved.RelativePath));
-                session.Pins.Add(new(playlist?.Id, path, Path.GetFileNameWithoutExtension(path)));
-            }
-        }
-        session.originalPins.AddRange(session.Pins);
-        session.originalPinPaths.AddRange(session.RenderedPins());
         return session;
     }
-
-    public IEnumerable<string> RenderedPins() => Pins.Select(pin =>
-    {
-        var playlist = Playlists.FirstOrDefault(p => p.Id == pin.PlaylistId);
-        return playlist is { IsDirty: true, Deleted: false } ? "/" + playlist.TargetPath : pin.Path;
-    });
-    public string PinLabel(HomePin pin) => Playlists.FirstOrDefault(p => p.Id == pin.PlaylistId)?.Name ?? pin.FallbackName;
 
     private void EnsureEditable(PlaylistDraft? playlist = null)
     {
@@ -119,7 +92,6 @@ public sealed class EditSession
         EnsureEditable(playlist);
         if (playlist.IsLiked) throw new InvalidOperationException("Liked Songs cannot be deleted. You can remove its entries.");
         playlist.Deleted = true;
-        Pins.RemoveAll(p => p.PlaylistId == playlist.Id);
     }
     public void ResolveConflict(PlaylistDraft playlist, bool useSd)
     {
@@ -169,30 +141,10 @@ public sealed class EditSession
         if (liked) Add(Liked, songs);
         else { var remove = songs.ToHashSet(); Liked.Entries.RemoveAll(remove.Contains); }
     }
-    public void TogglePin(PlaylistDraft playlist)
-    {
-        EnsureEditable(playlist);
-        if (Pins.RemoveAll(p => p.PlaylistId == playlist.Id) > 0) return;
-        if (Pins.Count >= 16) throw new InvalidOperationException("Your player supports up to 16 Home pins. Unpin a playlist first.");
-        if (!playlist.IsLiked && !playlist.Copies.ContainsKey(Storage.Internal)) playlist.ForceWrite = true;
-        if (playlist.IsLiked && playlist.Copies.Count == 0) playlist.ForceWrite = true;
-        var path = playlist.IsDirty || !playlist.Copies.ContainsKey(Storage.Internal)
-            ? playlist.TargetPath : playlist.Copies[Storage.Internal].RelativePath;
-        Pins.Add(new(playlist.Id, "/" + path, playlist.Name));
-    }
-    public void MovePin(int index, int direction)
-    {
-        EnsureEditable();
-        var target = index + direction;
-        if (target < 0 || target >= Pins.Count) return;
-        (Pins[index], Pins[target]) = (Pins[target], Pins[index]);
-    }
-    public void RemovePin(int index) { EnsureEditable(); Pins.RemoveAt(index); }
     public void Discard()
     {
         EnsureEditable();
         Playlists.RemoveAll(p => p.IsNew);
         foreach (var playlist in Playlists) playlist.Reset();
-        Pins = [.. originalPins];
     }
 }

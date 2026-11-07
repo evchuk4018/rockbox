@@ -66,6 +66,7 @@ class HomeTests(unittest.TestCase):
                 mixes.extend((disk / f"Playlists/Test Mix {i}.m3u8").read_text(encoding="utf-8").splitlines()[1:])
             self.assertCountEqual(mixes, liked)
             pins = disk / ".rockbox/home-pins.txt"
+            pins.parent.mkdir(exist_ok=True)
             pins.write_text("/Playlists/My own.m3u8\n", encoding="utf-8")
             before = {p: p.read_bytes() for p in disk.rglob("*") if p.is_file()}
             self.assertEqual(SEED.seed_playlists(disk), {})
@@ -192,8 +193,8 @@ int main(void)
     assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_SELECT | BUTTON_UP) != ACTION_WPS_TOGGLE_LIKE);
     assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT | BUTTON_UP) != ACTION_WPS_PLAY);
     assert(resolve(button_context_home, BUTTON_RIGHT, BUTTON_NONE) == ACTION_STD_OK);
-    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_PLAY);
-    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT | BUTTON_REPEAT) != ACTION_WPS_PLAY);
+    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_TREE_WPS);
+    assert(resolve(button_context_home, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT | BUTTON_REPEAT) != ACTION_TREE_WPS);
 #else
     assert(resolve(wps, BUTTON_SELECT | BUTTON_REL, BUTTON_SELECT) == ACTION_WPS_BROWSE);
     assert(resolve(wps, BUTTON_UP | BUTTON_REL, BUTTON_UP) == ACTION_WPS_PLAY);

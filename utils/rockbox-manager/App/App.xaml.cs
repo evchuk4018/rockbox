@@ -28,7 +28,7 @@ public partial class App : Application
                     return new { device.Id, device.Name, Internal = device.Internal.Root, SD = device.Sd?.Root,
                         Tracks = tracks.Count, Playlists = session.VisiblePlaylists.Count(),
                         Mirrored = session.Playlists.Count(p => p.Copies.Count == 2), Conflicts = session.Playlists.Count(p => p.HasConflict),
-                        HomePins = session.Pins.Count, MissingEntries = session.Playlists.Sum(p => p.Entries.Count(t => !known.Contains(t))),
+                        MissingEntries = session.Playlists.Sum(p => p.Entries.Count(t => !known.Contains(t))),
                         DraftChanges = session.ChangedCount };
                 }).ToArray());
                 File.WriteAllText(e.Args[inspectIndex + 1], JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

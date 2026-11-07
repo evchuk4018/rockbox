@@ -1,7 +1,7 @@
 # Rockbox on Windows
 
 The portable **Rockbox Manager** desktop app manages the Clip+ library, mirrored
-playlists, likes, and Home pin order. See [its usage and build guide](utils/rockbox-manager/README.md).
+playlists and likes. See [its usage and build guide](utils/rockbox-manager/README.md).
 
 Native Windows simulator setup for the **original SanDisk Sansa Clip v1**:
 Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The connected physical
@@ -90,11 +90,11 @@ Do not copy simulator codecs or executables to the device.
 
 Copy a small set of MP3s into `/MusicLibrary`, preserving tags and artist folders,
 then seed test playlists with `python scripts/seed-home-playlists.py --simdisk D:\`.
-The helper preserves existing playlists and pins. On a newly seeded test player,
-all copied tracks start in Liked Songs and the first two test mixes are pinned.
+The helper preserves existing playlists. On a newly seeded test player,
+all copied tracks start in Liked Songs and every test mix appears on Home.
 Eject the player through Windows, disconnect USB, and restart it. Open
 **Settings → Settings → General Settings → Database → Initialize Now** and
-restart if requested before testing Home genre autoplay. Pinned playlists can
+restart if requested before testing Home genre autoplay. Saved playlists can
 play immediately. On the player, the middle button pauses/resumes, Up toggles
 the like, and Home returns to the custom Home screen. Set the player's date and
 time if needed so listening-score decay uses the correct clock.
@@ -113,14 +113,15 @@ Insert for Home, and F1 for key help. Enter is not mapped to Select.
 ## Song-first Home
 
 The Sansa Clip and Clip+ targets open a scrolling Home list beneath the
-existing header: three liked-song suggestions, pinned playlists, then
-**Settings**. That final entry opens the complete former Home menu.
+existing header: three liked-song suggestions, every playlist in the configured
+catalog (normally `/Playlists`), **Artists**, **Albums**, then **Settings**.
+Playlists are alphabetized, nested folders are included, and duplicate names
+show their relative folder. The final Settings entry opens the former Home menu.
 
-On this Home screen, press **Right** to select the highlighted song, playlist,
-or Settings entry. Tap **middle** (**Space** in the simulator) to pause/resume
-background playback while staying on Home. It does nothing when no audio is
-playing. Holding middle still opens a pinned playlist's context menu. Other
-menus and playlist pickers keep middle-button selection.
+On Home, press **Right** to select the highlighted entry. Tap **middle**
+(**Space** in the simulator) to return to Now Playing while music is playing or
+paused, preserving its state. With playback stopped it does nothing. Inside
+Now Playing, middle still pauses/resumes. Other menus keep middle-button selection.
 
 Suggestions come from `/Playlists/Liked Songs.m3u8` and use three different
 primary genre tags, without requiring the Rockbox database. They stay fixed
@@ -141,11 +142,23 @@ Stopping and resuming, including after a restart, preserves queue order and
 used-song history. Selecting another Home suggestion starts a fresh session,
 even for the same genre. You can still deliberately replay tracks by going
 backward. Your saved repeat and shuffle preferences are preserved. Selecting a
-pinned playlist opens its tracks and uses normal playlist playback. Under
-**Settings → Playlists**, hold **Space** on a playlist and choose **Pin to Home**
-or **Unpin from Home**. Up to 16 pins are saved, in the order added, in
-`simdisk/.rockbox/home-pins.txt`. The same context menu is available on a pinned
-playlist on Home. **Insert** returns Home; **Left** goes back.
+playlist opens its tracks and uses normal playlist playback. **Insert** returns
+Home; **Left** goes back. Old `home-pins.txt` files are ignored and left untouched.
+
+**Artists** groups by album artist (falling back to track artist), then shows
+albums and All songs. **Albums** lists album title and album artist together;
+same-named albums by different artists remain separate. Album tracks use disc
+and track order, then title. These pages use the existing music database; run
+Database → Update Now after adding music or correcting tags.
+
+Hold **middle** on a song in Home, Now Playing, playlists, the queue, or database/
+file browsing for the same menu: Play next, Add to queue, Add to playlist,
+Like/Unlike, Go to artist, Go to album, and More. More keeps the original advanced
+menu. The selected song is captured when opening the menu, even if playback
+advances. Play next inserts immediately after the current track; Add to queue
+appends. Both preserve playing/paused state and do not start stopped audio.
+Explicit queue additions cancel a pending genre change so it cannot discard
+the requested song, and genre autoplay continues after the batch finishes.
 
 Create the local test playlists with:
 
@@ -154,9 +167,9 @@ python .\scripts\seed-home-playlists.py
 ```
 
 This creates Liked Songs from all imported MP3s, five deterministic Test Mixes,
-and initially pins the first two mixes. It preserves existing playlists and
-pins on reruns and never copies or edits audio. The current library produces
-850 liked tracks and five mixes of 170. Generated playlists and pins are ignored
+and shows every mix on Home. It preserves existing playlists on reruns and
+never copies or edits audio. The current library produces
+850 liked tracks and five mixes of 170. Generated playlists are ignored
 by Git. Replace `simdisk/Playlists/Liked Songs.m3u8` with your prepared UTF-8
 playlist when ready; relative paths are resolved from the playlist's directory.
 Missing or unreadable tracks are skipped, and Home shows a message if no liked
@@ -225,7 +238,7 @@ after adding, removing, or retagging music; normal listening and restarting do
 not require an update. Home suggestions themselves still work without the
 database, but selecting one asks you to initialize/update it before autoplay.
 Empty automatic updates now leave the database untouched. Database updates on
-Clip/Clip+ use bounded work memory so starting a pinned mix while an update is
+Clip/Clip+ use bounded work memory so starting a saved mix while an update is
 running does not exhaust the audio buffer.
 
 Only Home-autoplay listening earns recommendation points, including a resumed
@@ -323,3 +336,17 @@ remain pending. `C:\RockboxDev\NEXT-TRANSFER.md` records the local handoff.
 preserving the entire `simdisk` directory. Rebuild afterward. The build installs
 codecs and themes as well as compiling the executable. GUI behavior and audio
 playback are left for the user's manual testing, as requested.
+
+## Artist and album tag review
+
+`scripts/review-music-library.py` inventories the active local libraries and
+creates an evidence-backed correction manifest using cached MusicBrainz searches.
+Use `inventory`, then `research`, then `apply`, each with `--work <audit-folder>`.
+Use repeated `--root` arguments for explicit libraries. Research does not edit
+music. Apply requires a verified recording, matching duration and release track
+position. It changes only the reviewed tags, preserves paths and unrelated tags,
+backs up changed files once, and verifies encoded-audio hashes before and after.
+Unresolved matches keep their existing tags and remain visible in `review.json`.
+Full originals and `applied.json` provide the restore set; keep the audit outside
+Git. Update the player's database after retagging. The homelab music library is
+outside this cleanup's write scope.

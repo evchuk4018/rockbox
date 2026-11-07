@@ -1,4 +1,4 @@
-/* Song sampling and persistent playlist pins. SPDX-License-Identifier: GPL-2.0-or-later */
+/* Song sampling and navigation. SPDX-License-Identifier: GPL-2.0-or-later */
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -136,91 +136,4 @@ bool home_refresh_due(const struct home_picks *picks, uint32_t now)
 bool home_manual_refresh(int action, int selected)
 {
     return action == ACTION_STD_PREV && selected == 0;
-}
-
-int home_pins_load(char pins[HOME_MAX_PINS][MAX_PATH])
-{
-    int fd = open(HOME_PINS_FILE, O_RDONLY);
-    if (fd < 0)
-        return errno == ENOENT ? 0 : -1;
-
-    char line[MAX_PATH];
-    int count = 0, length;
-    while ((length = read_line(fd, line, sizeof(line))) > 0)
-    {
-        if (line[0] != '/' || strlen(line) >= MAX_PATH - 1)
-            continue;
-        bool duplicate = false;
-        for (int i = 0; i < count; i++)
-            if (!strcmp(pins[i], line))
-                duplicate = true;
-        if (duplicate)
-            continue;
-        if (count == HOME_MAX_PINS)
-        {
-            count = -1;
-            break;
-        }
-        strlcpy(pins[count++], line, MAX_PATH);
-    }
-    if (length < 0)
-        count = -1;
-    close(fd);
-    return count;
-}
-
-static char pin_buffer[HOME_MAX_PINS][MAX_PATH];
-
-bool home_playlist_is_pinned(const char *path)
-{
-    int count = home_pins_load(pin_buffer);
-    for (int i = 0; i < count; i++)
-        if (!strcmp(pin_buffer[i], path))
-            return true;
-    return false;
-}
-
-int home_toggle_pin(const char *path)
-{
-    int count = home_pins_load(pin_buffer);
-    if (count < 0 || !path || path[0] != '/' || strlen(path) >= MAX_PATH - 1 ||
-        strchr(path, '\n') || strchr(path, '\r'))
-        return -1;
-
-    int index;
-    for (index = 0; index < count; index++)
-        if (!strcmp(pin_buffer[index], path))
-            break;
-    if (index < count)
-    {
-        memmove(pin_buffer[index], pin_buffer[index + 1],
-                (count - index - 1) * sizeof(pin_buffer[0]));
-        count--;
-    }
-    else
-    {
-        if (count == HOME_MAX_PINS)
-            return -1;
-        strlcpy(pin_buffer[count++], path, MAX_PATH);
-    }
-
-    const char *temp = HOME_PINS_FILE ".tmp";
-    int fd = open(temp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd < 0)
-        return -1;
-    bool ok = true;
-    for (int i = 0; ok && i < count; i++)
-    {
-        size_t length = strlen(pin_buffer[i]);
-        ok = write(fd, pin_buffer[i], length) == (ssize_t)length &&
-             write(fd, "\n", 1) == 1;
-    }
-    if (fsync(fd) < 0)
-        ok = false;
-    if (close(fd) < 0)
-        ok = false;
-    if (ok && rename(temp, HOME_PINS_FILE) == 0)
-        return 0;
-    remove(temp);
-    return -1;
 }

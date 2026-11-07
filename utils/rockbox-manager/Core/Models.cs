@@ -93,5 +93,3 @@ public sealed class PlaylistDraft
         Deleted = ForceWrite = false;
     }
 }
-
-public sealed record HomePin(Guid? PlaylistId, string Path, string FallbackName);

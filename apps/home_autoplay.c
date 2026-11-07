@@ -149,7 +149,9 @@ static bool mark_played(const char *path)
     int slot = queue_pool(queue), pool = -1;
     bool ok = slot == 0; /* Legacy queues migrate at the next boundary. */
     off_t offset = -1;
-    while (slot > 0 && read_line(queue, line, sizeof(line)) > 0)
+    bool matched = false;
+    int length = 0;
+    while (slot > 0 && (length = read_line(queue, line, sizeof(line))) > 0)
     {
         if (!strncmp(line, OFFSET_COMMENT, strlen(OFFSET_COMMENT)))
         {
@@ -161,6 +163,7 @@ static bool mark_played(const char *path)
         {
             if (!strcmp(line, path) && offset >= 2)
             {
+                matched = true;
                 pool = open(pool_name(slot), O_RDWR);
                 int marker = pool >= 0 ? pool_marker(pool) : -1;
                 ok = marker >= 0 && lseek(pool, offset, SEEK_SET) == offset &&
@@ -174,6 +177,30 @@ static bool mark_played(const char *path)
                 break;
             }
             offset = -1;
+        }
+    }
+    /* Manually inserted songs are in the control file, not the generated
+     * batch. Mark an in-pool song used, or accept an outside song without
+     * disabling the next batch. Malformed/read failures still fail closed. */
+    if (!matched && slot > 0 && length == 0)
+    {
+        pool = open(pool_name(slot), O_RDWR);
+        int marker = pool >= 0 ? pool_marker(pool) : -1;
+        ok = marker >= 0;
+        int n = 0;
+        while (ok)
+        {
+            off_t position = lseek(pool, 0, SEEK_CUR);
+            n = pool_read(pool, line, sizeof(line));
+            if (n <= 0) { ok = n == 0; break; }
+            if (!strcmp(line + 1, path))
+            {
+                char played = marker;
+                ok = position >= 0 && (line[0] == marker ||
+                    (lseek(pool, position, SEEK_SET) == position &&
+                     write(pool, &played, 1) == 1 && fsync(pool) == 0));
+                break;
+            }
         }
     }
     if (pool >= 0 && close(pool) < 0) ok = false;

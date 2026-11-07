@@ -9,9 +9,7 @@
 #include "rbpaths.h"
 
 #define HOME_SONG_COUNT 3
-#define HOME_MAX_PINS 16
 #define HOME_LIKED_PLAYLIST "/Playlists/Liked Songs.m3u8"
-#define HOME_PINS_FILE ROCKBOX_DIR "/home-pins.txt"
 #define HOME_REFRESH_TICKS (30u * 60u * HZ)
 
 struct home_song {
@@ -36,9 +34,6 @@ void home_sample_add(struct home_picks *picks, const char *path,
                      const char *title, const char *artist, const char *genre);
 bool home_refresh_due(const struct home_picks *picks, uint32_t now);
 bool home_manual_refresh(int action, int selected);
-int home_pins_load(char pins[HOME_MAX_PINS][MAX_PATH]);
-bool home_playlist_is_pinned(const char *path);
-int home_toggle_pin(const char *path);
 /* -1 on storage failure, otherwise 0 (unliked) or 1 (liked). */
 int home_liked_state(const char *path);
 int home_toggle_like(const char *path);

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "home_screen.h"
+#include "music_library.h"
 #include "home_autoplay.h"
 #include "action.h"
 #include "abrepeat.h"
@@ -27,8 +28,7 @@
 #include "wps.h"
 
 static struct home_picks picks;
-static char pins[HOME_MAX_PINS][MAX_PATH];
-static int pin_count;
+static int playlist_count;
 static unsigned int liked_revision;
 
 static bool sample_track(const char *path, void *context)
@@ -86,14 +86,9 @@ static const char *item_name(int item, void *data, char *buf, size_t size)
         return picks.count ? picks.songs[item].label :
                              (const char *)str(LANG_HOME_NO_LIKED);
     item -= song_rows();
-    if (item >= pin_count)
-        return str(LANG_SETTINGS);
-    const char *name = strrchr(pins[item], '/');
-    strlcpy(buf, name ? name + 1 : pins[item], size);
-    char *extension = strrchr(buf, '.');
-    if (extension)
-        *extension = '\0';
-    return buf;
+    if (item < playlist_count) return music_catalog_label(item, buf, size);
+    item -= playlist_count;
+    return str(item == 0 ? LANG_ARTISTS : item == 1 ? LANG_ALBUMS : LANG_SETTINGS);
 }
 
 static enum themable_icons item_icon(int item, void *data)
@@ -101,7 +96,7 @@ static enum themable_icons item_icon(int item, void *data)
     (void)data;
     if (item < song_rows())
         return Icon_Audio;
-    return item < song_rows() + pin_count ? Icon_Playlist : Icon_Submenu_Entered;
+    return item < song_rows() + playlist_count ? Icon_Playlist : Icon_Submenu_Entered;
 }
 
 static int speak_item(int item, void *data)
@@ -132,13 +127,13 @@ int home_screen(void)
 
     while (true)
     {
-        pin_count = home_pins_load(pins);
-        if (pin_count < 0)
+        playlist_count = music_catalog_open();
+        if (playlist_count < 0)
         {
-            pin_count = 0;
+            playlist_count = 0;
             splash(HZ * 2, ID2P(LANG_FAILED));
         }
-        gui_synclist_set_nb_items(&list, song_rows() + pin_count + 1);
+        gui_synclist_set_nb_items(&list, song_rows() + playlist_count + 3);
         gui_synclist_select_item(&list, MIN(home_selection, list.nb_items - 1));
         FOR_NB_SCREENS(i)
             sb_set_persistent_title(str(LANG_ROCKBOX_TITLE), Icon_Rockbox, i);
@@ -164,25 +159,20 @@ int home_screen(void)
             int pin = home_selection - song_rows();
             switch (action)
             {
-                case ACTION_WPS_PLAY:
-                    if (audio_status() & AUDIO_STATUS_PLAY)
-                        wps_do_action(audio_status() & AUDIO_STATUS_PAUSE ?
-                                      WPS_PLAY : WPS_PAUSE, false);
-                    break;
                 case ACTION_STD_OK:
                     if (home_selection < picks.count)
                     {
                         result = home_play_suggestion(picks.songs[home_selection].path);
                         goto done;
                     }
-                    if (pin >= 0 && pin < pin_count)
+                    if (pin >= 0 && pin < playlist_count)
                     {
-                        if (!file_exists(pins[pin]))
+                        if (!file_exists(music_catalog_path(pin)))
                             splash(HZ * 2, ID2P(LANG_FILE_NOT_FOUND));
                         else
                         {
                             enum playlist_viewer_result ret =
-                                playlist_viewer_ex(pins[pin], NULL);
+                                playlist_viewer_ex(music_catalog_path(pin), NULL);
                             if (ret == PLAYLIST_VIEWER_OK)
                             {
                                 result = GO_TO_WPS;
@@ -199,16 +189,30 @@ int home_screen(void)
                         }
                         reload = true;
                     }
-                    else if (pin == pin_count)
+                    else if (pin >= playlist_count)
                     {
-                        home_in_settings = true;
+                        if (pin < playlist_count + 2)
+                            music_library_request(pin == playlist_count ? MUSIC_ARTISTS : MUSIC_ALBUMS, NULL);
+                        else home_in_settings = true;
                         goto done;
                     }
                     break;
                 case ACTION_STD_CONTEXT:
-                    if (pin >= 0 && pin < pin_count)
+                    if (home_selection < picks.count)
                     {
-                        int ret = onplay(pins[pin], FILE_ATTR_M3U, CONTEXT_TREE,
+                        int ret = onplay(picks.songs[home_selection].path, FILE_ATTR_AUDIO,
+                                         CONTEXT_TREE, false, ONPLAY_NO_CUSTOMACTION);
+                        if (ret == ONPLAY_MAINMENU) goto done;
+                        if (ret == ONPLAY_START_PLAY) { result = GO_TO_WPS; goto done; }
+                        if (ret == ONPLAY_REVEAL_FILE || ret == ONPLAY_PLUGIN)
+                        { result = ret == ONPLAY_PLUGIN ? GO_TO_PLUGIN : GO_TO_FILEBROWSER; goto done; }
+                        reload = true;
+                    }
+                    else if (pin >= 0 && pin < playlist_count)
+                    {
+                        char playlist[MAX_PATH];
+                        strlcpy(playlist, music_catalog_path(pin), sizeof(playlist));
+                        int ret = onplay(playlist, FILE_ATTR_M3U, CONTEXT_TREE,
                                          false, ONPLAY_NO_CUSTOMACTION);
                         if (ret == ONPLAY_START_PLAY)
                         {
@@ -232,8 +236,9 @@ int home_screen(void)
                     reload = true;
                     break;
                 case ACTION_TREE_WPS:
-                    result = GO_TO_PREVIOUS_MUSIC;
-                    goto done;
+                    if (audio_status() & AUDIO_STATUS_PLAY)
+                    { result = GO_TO_WPS; goto done; }
+                    break;
                 case ACTION_TREE_STOP:
                     list_stop_handler();
                     reload = true;
@@ -246,6 +251,7 @@ int home_screen(void)
         }
     }
 done:
+    music_catalog_close();
     keyclick_set_callback(NULL, NULL);
     talk_shutup();
     gui_synclist_scroll_stop(&list);

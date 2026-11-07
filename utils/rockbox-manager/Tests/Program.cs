@@ -45,7 +45,7 @@ Test("Loading and drafts do not write files; equal mirrors collapse", () =>
 {
     using var f = new Fixture(); var before = f.Hashes(); var s = EditSession.Load(f.Device);
     Check(s.Playlists.Count == 2 && s.Playlists.Single(p => !p.IsLiked).Copies.Count == 2 && !s.IsDirty);
-    var mix = s.Playlists.Single(p => !p.IsLiked); s.Rename(mix, "New name"); s.Add(mix, [Sd("missing.mp3")]); s.TogglePin(mix);
+    var mix = s.Playlists.Single(p => !p.IsLiked); s.Rename(mix, "New name"); s.Add(mix, [Sd("missing.mp3")]);
     Check(before.SequenceEqual(f.Hashes())); s.Discard(); Check(!s.IsDirty && mix.Name == "Mix");
 });
 Test("Conflicting mirror order requires an explicit version", () =>
@@ -74,30 +74,31 @@ Test("Likes are distinct, protected, and only change the internal file", () =>
     Check(new SyncEngine().Execute(batch, () => f.Device with { Sd = null }).Success);
     Check(EditSession.Load(f.Device).Liked.Entries.Contains(Sd("b.mp3")));
 });
-Test("Home pin limit, order and rename/delete references", () =>
+Test("All playlists are available without pins and legacy pins remain untouched", () =>
 {
-    using var f = new Fixture(); var s = EditSession.Load(f.Device); var p = s.Playlists.Single(p => !p.IsLiked);
-    s.Rename(p, "Renamed"); Check(s.RenderedPins().Single() == "/Playlists/Renamed.m3u8");
-    for (var i = 0; i < 15; i++) s.TogglePin(s.Create("Pin " + i));
-    Throws(() => s.TogglePin(s.Create("Too many"))); s.MovePin(1, -1); Check(s.PinLabel(s.Pins[0]) == "Pin 0");
-    s.Delete(p); Check(s.Pins.Count == 15 && !s.RenderedPins().Contains("/Playlists/Renamed.m3u8"));
+    using var f = new Fixture(); var before = File.ReadAllBytes(f.PathFor(Storage.Internal, EditSession.PinsPath));
+    var s = EditSession.Load(f.Device);
+    for (var i = 0; i < 24; i++) s.Create("Mix " + i, [Sd("a.mp3")]);
+    Check(new SyncEngine().Execute(SyncBatch.Build(s, f.Backups), () => f.Device).Success);
+    Check(EditSession.Load(f.Device).VisiblePlaylists.Count() == 26);
+    Check(before.SequenceEqual(File.ReadAllBytes(f.PathFor(Storage.Internal, EditSession.PinsPath))));
 });
 Test("Verified send mirrors playlists and leaves audio hashes unchanged", () =>
 {
     using var f = new Fixture(); var audio = f.AudioHashes(); var s = EditSession.Load(f.Device);
     var p = s.Create("New 🦩", [Sd("b.mp3"), new(Storage.Internal, "Music/internal.mp3"), Sd("missing.mp3")]);
-    s.TogglePin(p); var batch = SyncBatch.Build(s, f.Backups); var result = new SyncEngine().Execute(batch, () => f.Device);
+    var batch = SyncBatch.Build(s, f.Backups); var result = new SyncEngine().Execute(batch, () => f.Device);
     Check(result.Success, result.Message); var loaded = EditSession.Load(f.Device); var copy = loaded.Playlists.Single(p => p.Name == "New 🦩");
     Check(copy.Copies.Count == 2 && !copy.HasConflict && copy.Entries.SequenceEqual(p.Entries) && !loaded.IsDirty);
     Check(audio.SequenceEqual(f.AudioHashes())); Check(File.Exists(Path.Combine(batch.BackupFolder, "operation.json")));
 });
-Test("Rename writes both destinations and pins before deleting originals", () =>
+Test("Rename writes both destinations before deleting originals", () =>
 {
     using var f = new Fixture(); var s = EditSession.Load(f.Device); s.Rename(s.Playlists.Single(p => !p.IsLiked), "Renamed");
     var files = new FaultFiles { OnDelete = _ => {
         Check(File.Exists(f.PathFor(Storage.Internal, "Playlists/Renamed.m3u8")));
         Check(File.Exists(f.PathFor(Storage.Sd, "Playlists/Renamed.m3u8")));
-        Check(File.ReadAllText(f.PathFor(Storage.Internal, EditSession.PinsPath)).Contains("Renamed")); } };
+        Check(File.ReadAllText(f.PathFor(Storage.Internal, EditSession.PinsPath)).Contains("Mix")); } };
     Check(new SyncEngine(files).Execute(SyncBatch.Build(s, f.Backups), () => f.Device).Success);
     Check(!File.Exists(f.PathFor(Storage.Internal, "Playlists/Mix.m3u8")) && !File.Exists(f.PathFor(Storage.Sd, "Playlists/Mix.m3u8")));
 });
@@ -151,7 +152,7 @@ Test("Write boundary rejects audio, firmware, traversal and pin file on SD", () 
         Throws(() => SyncEngine.SafePath(f.Device, new() { Storage = Storage.Internal, RelativePath = path }));
     Throws(() => SyncEngine.SafePath(f.Device, new() { Storage = Storage.Sd, RelativePath = EditSession.PinsPath }));
 });
-Test("Legacy conversion updates pin references and removes legacy copies", () =>
+Test("Legacy conversion preserves retired pins and removes legacy copies", () =>
 {
     using var f = new Fixture();
     File.Move(f.PathFor(Storage.Internal, "Playlists/Mix.m3u8"), f.PathFor(Storage.Internal, "Playlists/Mix.m3u"));
@@ -159,7 +160,7 @@ Test("Legacy conversion updates pin references and removes legacy copies", () =>
     f.Write(Storage.Internal, EditSession.PinsPath, "/Playlists/Mix.m3u\n");
     var s = EditSession.Load(f.Device); s.Add(s.Playlists.Single(p => !p.IsLiked), [Sd("c.mp3")]);
     Check(new SyncEngine().Execute(SyncBatch.Build(s, f.Backups), () => f.Device).Success);
-    Check(File.ReadAllText(f.PathFor(Storage.Internal, EditSession.PinsPath)) == "/Playlists/Mix.m3u8\n");
+    Check(File.ReadAllText(f.PathFor(Storage.Internal, EditSession.PinsPath)) == "/Playlists/Mix.m3u\n");
     Check(!File.Exists(f.PathFor(Storage.Internal, "Playlists/Mix.m3u")));
 });
 Test("Unreadable metadata falls back to filename without changing audio", () =>

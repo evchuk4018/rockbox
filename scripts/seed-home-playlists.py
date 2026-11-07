@@ -27,13 +27,6 @@ def seed_playlists(simdisk: Path) -> dict[str, int]:
             created[name] = len(entries)
         except FileExistsError:
             pass
-    settings = simdisk / ".rockbox"
-    settings.mkdir(parents=True, exist_ok=True)
-    try:
-        with (settings / "home-pins.txt").open("x", encoding="utf-8", newline="\n") as output:
-            output.write("/Playlists/Test Mix 1.m3u8\n/Playlists/Test Mix 2.m3u8\n")
-    except FileExistsError:
-        pass
     return created
 
 
@@ -43,4 +36,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     for name, count in seed_playlists(args.simdisk).items():
         print(f"Created {name}: {count} tracks")
-    print("Existing playlists and pins preserved.")
+    print("Existing playlists preserved.")

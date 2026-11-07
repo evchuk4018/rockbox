@@ -33,6 +33,9 @@
 #include "keyboard.h"
 #include "filetypes.h"
 #include "onplay.h"
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+#include "music_library.h"
+#endif
 #include "talk.h"
 #include "misc.h"
 #include "action.h"
@@ -1119,6 +1122,17 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename,
             }
             case ACTION_STD_CONTEXT:
             {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+                struct playlist_entry *selected_track = playlist_buffer_get_track(&viewer.buffer, viewer.selected_track);
+                int song_result = music_song_menu(selected_track->name);
+                if (song_result == ONPLAY_MAINMENU)
+                { ret = PLAYLIST_VIEWER_MAINMENU; goto exit; }
+                if (song_result != MUSIC_MENU_MORE)
+                {
+                    update_gui(&playlist_lists, true);
+                    break;
+                }
+#endif
                 int pv_context_result = context_menu(viewer.selected_track);
 
                 if (pv_context_result == PV_CONTEXT_USB)

@@ -17467,3 +17467,108 @@
     *: "Could not add to playlist"
   </voice>
 </phrase>
+
+<phrase>
+  id: LANG_MUSIC_ADD_QUEUE
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "Add to queue"
+  </source>
+  <dest>
+    *: "Add to queue"
+  </dest>
+  <voice>
+    *: "Add to queue"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_LIKE
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "Like"
+  </source>
+  <dest>
+    *: "Like"
+  </dest>
+  <voice>
+    *: "Like"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_UNLIKE
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "Unlike"
+  </source>
+  <dest>
+    *: "Unlike"
+  </dest>
+  <voice>
+    *: "Unlike"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_GO_ARTIST
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "Go to artist"
+  </source>
+  <dest>
+    *: "Go to artist"
+  </dest>
+  <voice>
+    *: "Go to artist"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_GO_ALBUM
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "Go to album"
+  </source>
+  <dest>
+    *: "Go to album"
+  </dest>
+  <voice>
+    *: "Go to album"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_MORE
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "More..."
+  </source>
+  <dest>
+    *: "More..."
+  </dest>
+  <voice>
+    *: "More..."
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_MUSIC_ALL_SONGS
+  desc: Clip music library and song menu
+  user: core
+  <source>
+    *: "All songs"
+  </source>
+  <dest>
+    *: "All songs"
+  </dest>
+  <voice>
+    *: "All songs"
+  </voice>
+</phrase>

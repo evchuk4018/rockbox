@@ -23,7 +23,7 @@
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,12,0"><TextBlock x:Name="ViewTitle" FontSize="27" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="ViewCaption" Foreground="{StaticResource Muted}" Margin="0,7,0,16" TextWrapping="Wrap"/></StackPanel>
-            <StackPanel x:Name="PlaylistActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button x:Name="PinButton" Content="Pin to Home" Click="PinClick"/><Button Content="Rename" Click="RenameClick"/><Button Content="Duplicate" Click="DuplicateClick"/><Button Content="Delete" Click="DeleteClick" Margin="0"/></StackPanel>
+            <StackPanel x:Name="PlaylistActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button Content="Rename" Click="RenameClick"/><Button Content="Duplicate" Click="DuplicateClick"/><Button Content="Delete" Click="DeleteClick" Margin="0"/></StackPanel>
           </Grid>
           <Border x:Name="ConflictBanner" Grid.Row="1" Background="#493D28" CornerRadius="8" Padding="12" Margin="0,0,0,14" Visibility="Collapsed"><StackPanel><TextBlock Text="The internal and SD copies differ. Choose the songs and order to keep." TextWrapping="Wrap" Margin="0,0,0,10"/><WrapPanel><Button Content="Use Internal Version" Click="UseInternalClick"/><Button Content="Use SD Version" Click="UseSdClick"/></WrapPanel></StackPanel></Border>
           <Grid x:Name="SearchPanel" Grid.Row="2" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -52,8 +52,6 @@
               <DataGridTextColumn Header="STORAGE" Binding="{Binding Location}" Width="95"/>
             </DataGrid.Columns>
           </DataGrid>
-          <ListBox x:Name="HomeList" Grid.Row="4" Visibility="Collapsed" DisplayMemberPath="Label"/>
-          <WrapPanel x:Name="HomeActions" Grid.Row="3" Visibility="Collapsed" Margin="0,0,0,16"><Button Content="↑ Move up" Click="PinUpClick"/><Button Content="↓ Move down" Click="PinDownClick"/><Button Content="Unpin" Click="UnpinClick"/></WrapPanel>
           <TextBlock x:Name="RowCount" Grid.Row="5" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,12,0,0"/>
         </Grid></Border>
         <Border x:Name="ConnectionPanel" Background="{StaticResource Panel}" CornerRadius="12" Padding="50"><StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">

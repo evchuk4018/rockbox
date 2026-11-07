@@ -172,7 +172,7 @@ static const struct button_mapping button_context_listtree_scroll_with_combo[]  
 
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 static const struct button_mapping button_context_home[] = {
-    { ACTION_WPS_PLAY, BUTTON_SELECT|BUTTON_REL, BUTTON_SELECT },
+    { ACTION_TREE_WPS, BUTTON_SELECT|BUTTON_REL, BUTTON_SELECT },
     { ACTION_STD_OK,   BUTTON_RIGHT,             BUTTON_NONE },
 
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_TREE),

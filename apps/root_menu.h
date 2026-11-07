@@ -64,6 +64,9 @@ enum {
     GO_TO_PLAYLIST_VIEWER,
     GO_TO_SYSTEM_SCREEN,
     GO_TO_SHORTCUTMENU
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    ,GO_TO_MUSIC_LIBRARY
+#endif
 };
 #ifndef PLUGIN
 extern struct menu_item_ex root_menu_;

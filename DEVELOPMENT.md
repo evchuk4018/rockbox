@@ -12,7 +12,7 @@ README.md for installation and the device test procedure.
 | Area | Files |
 | --- | --- |
 | Main menu and navigation | `apps/root_menu.c`, `apps/menu.c`, `apps/menu.h` |
-| Clip Home, suggestions, and pins | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_liked.c`, `apps/home_screen.h` |
+| Clip Home and suggestions | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_liked.c`, `apps/home_screen.h` |
 | Genre autoplay and persistent listening scores | `apps/home_autoplay.c`, `apps/home_scores.c`, `apps/home_autoplay.h` |
 | Settings and submenus | `apps/menus/`, `apps/settings_list.c`, `apps/settings.c` |
 | Lists, status bar, and layout | `apps/gui/`, including `list.c` and `viewport.c` |
@@ -59,7 +59,7 @@ python .\tools\windows-simulator\tests\test-home.py
 These compile the production Home data, score store, queue builder, fixed-point
 logarithm, and actual playlist progression functions with small Windows host
 adapters. They cover genre/track uniqueness, whole-library genre matching,
-Unicode paths, refresh/navigation, pins, repeat modes, continuous autoplay,
+Unicode paths, refresh/navigation, repeat modes, continuous autoplay,
 scoring thresholds and session ownership, duplicate finish events, decay,
 restart persistence, malformed/interrupted rows, injected open/read/allocation/
 write/sync/close/rename failures, compaction failures, weighted selection,
@@ -121,9 +121,9 @@ Invoke-RockboxBash -Msys2Root C:\msys64 -Script "$PWD\tools\windows-simulator\te
 After building and seeding, the user should check the following with `run.ps1`:
 
 1. Press **Insert** for Home. Confirm the existing header, three song rows,
-   Test Mix 1 and 2, then Settings. Long selected titles should scroll. **Right**
-   selects an entry; **middle/Space** pauses/resumes background playback without
-   leaving Home or selecting the highlighted item. With no audio it does nothing.
+   all playlists, Artists, Albums, then Settings. Long titles should scroll. Right
+   selects; middle/Space returns to Now Playing without toggling its pause state.
+   With stopped playback it does nothing.
 2. Press **Up** on the first song to refresh. Hold Up to confirm it does not
    repeatedly refresh. Start a song, return Home, and refresh without interrupting it.
 3. Initialize the database once using Settings → Settings → General Settings →
@@ -135,18 +135,19 @@ After building and seeding, the user should check the following with `run.ps1`:
    batches and confirm no automatic repeats until the pool is exhausted; the
    final batch can be shorter. Check no immediate repeat at the cycle boundary
    when another song is available. A one-song genre should keep playing.
-4. Open a pinned mix, choose a track, and confirm normal playlist playback.
+4. Open a saved mix, choose a track, and confirm normal playlist playback.
    Back from its track list should return Home. Insert should always return Home.
-5. Open **Settings → Playlists**, hold **Space** on Test Mix 3, and pin it.
-   Return Home to see it after the existing pins. Unpin it and restart to check
-   persistence. The playlist itself should remain available.
+5. Open Artists and Albums. Check album-artist grouping, disc/track order and
+   same-named albums by different artists. Hold middle on songs in each screen
+   and verify the shared actions, including a playback advance during the menu.
+   More must retain existing advanced actions; long release must not also select.
 6. Open Files or a settings submenu through the bottom Settings entry. Back
    should return to that menu; Insert should return to the song-first Home.
 7. After 30 minutes away from Home, return and confirm that suggestions refresh.
    Do not expect a refresh merely from sitting on Home.
 8. During Home autoplay, skip before halfway, skip/stop after halfway, and let a
    song finish. The latest matching TSV rows should gain 0, 1, and 2 points
-   respectively. Pausing should not create a row. Repeat through a pinned mix
+   respectively. Pausing should not create a row. Repeat through a saved mix
    and confirm its playback does not update these scores.
 9. Stop, restart the simulator, and resume the playlist. Check the saved queue
    order, used-song history across batches, and continued scoring. Selecting a
@@ -266,7 +267,7 @@ Decay and weighted selection use fixed-point arithmetic, calculated only when
 reading/updating scores or generating picks. A bad/backward clock does not
 increase a score through decay.
 
-Pins and generated queues use checked temporary files, sync, and replacement
+Generated queues use checked temporary files, sync, and replacement
 rename. Score rows are consolidated only on Home refresh after their count
 exceeds four times the number of tracked songs plus 64. Failed consolidation
 preserves the original file. A power loss can discard the last unfinished
@@ -318,3 +319,19 @@ theme. Installation replaces build files under `.rockbox` through the existing
 bootloader; it does not flash a bootloader. Verify copied files against the build
 archive and music sources, then leave physical controls and audio playback to
 manual testing after USB disconnection.
+
+## Clip library navigation
+
+`apps/music_library.c` owns the compact catalog snapshot, database-backed artist/
+album browser, and shared song actions. Catalog and database allocations request
+only measured storage, never the maximum audio heap. A pending selected-song
+browse request is consumed by the root dispatcher after existing menus/viewers
+have unwound. Album identity is album artist plus title; track sorting is disc,
+track, then title. Pin controls are removed; legacy files remain untouched.
+
+Run `python tools/windows-simulator/tests/test-music-library.py` for production
+catalog/grouping/action checks (including >16 playlists, allocation failure,
+Home return states and selected-song capture). Run
+`python tools/windows-simulator/tests/test-music-tags.py` for real MP3/Opus tag
+writes and encoded-audio verification. The existing Home suite also checks
+manually inserted songs inside and outside an autoplay pool before the next batch.

@@ -150,8 +150,7 @@ public partial class MainWindow : Window
         var target = AddTarget.SelectedItem as PlaylistDraft;
         navigating = true;
         var nav = new List<NavItem> { new("library", "♫  All music", $"{library.Count:N0} songs · combined library"),
-            new("liked", "♥  " + session.Liked.Label, $"{session.Liked.Entries.Count:N0} liked songs"),
-            new("home", "⌂  Home order", $"{session.Pins.Count} of 16 pins") };
+            new("liked", "♥  " + session.Liked.Label, $"{session.Liked.Entries.Count:N0} liked songs") };
         nav.AddRange(session.VisiblePlaylists.Where(p => !p.IsLiked).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => new NavItem("playlist:" + p.Id, p.Label, $"{p.Entries.Count:N0} songs · {p.CopyLabel}")));
         currentKey = selectKey ?? currentKey;
@@ -175,33 +174,22 @@ public partial class MainWindow : Window
     {
         if (session is null) return;
         var playlist = CurrentPlaylist;
-        var home = currentKey == "home";
-        ViewTitle.Text = home ? "Home order" : playlist?.Name ?? "All music";
-        ViewCaption.Text = home ? "Drag your listening routine into order with the controls below. Changes appear on your player's Home screen." :
-            playlist is null ? "Search every song on your player. Select songs to build a playlist or update your likes." :
+        ViewTitle.Text = playlist?.Name ?? "All music";
+        ViewCaption.Text = playlist is null ? "Search every song on your player. Select songs to build a playlist or update your likes." :
             playlist.IsLiked ? "The hearts on your player use this playlist. Removing an entry unlikes the song." :
             $"{playlist.Entries.Count:N0} songs · {playlist.CopyLabel} · Changes will be sent to both storage locations.";
         PlaylistActions.Visibility = playlist is { IsLiked: false } ? Visibility.Visible : Visibility.Collapsed;
         ConflictBanner.Visibility = playlist?.HasConflict == true ? Visibility.Visible : Visibility.Collapsed;
-        SearchPanel.Visibility = SongActions.Visibility = Songs.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
-        HomeList.Visibility = HomeActions.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        SearchPanel.Visibility = SongActions.Visibility = Songs.Visibility = Visibility.Visible;
         AddTarget.Visibility = AddButton.Visibility = playlist is null ? Visibility.Visible : Visibility.Collapsed;
         BrowseButton.Visibility = RemoveButton.Visibility = UpButton.Visibility = DownButton.Visibility = playlist is null ? Visibility.Collapsed : Visibility.Visible;
-        if (home)
-        {
-            HomeList.ItemsSource = session.Pins.Select((pin, i) => new PinRow(i, $"{i + 1:00}    {session.PinLabel(pin)}" + (pin.PlaylistId is null ? "  · unavailable" : ""))).ToList();
-            RowCount.Text = $"{session.Pins.Count}/16 pinned playlists · order is saved when you send changes";
-        }
-        else
-        {
-            var liked = session.Liked.Entries.ToHashSet();
-            var shown = playlist is null ? library : playlist.Entries.Select(path => trackIndex.GetValueOrDefault(path) ??
-                new Track(path, Path.GetFileNameWithoutExtension(path.RelativePath), "", "", "", TimeSpan.Zero, false)).ToList();
-            rows = new ListCollectionView(shown.Select((track, i) => new TrackRow(i, track, liked.Contains(track.Path))).ToList());
+        var liked = session.Liked.Entries.ToHashSet();
+        var shown = playlist is null ? library : playlist.Entries.Select(path => trackIndex.GetValueOrDefault(path) ??
+            new Track(path, Path.GetFileNameWithoutExtension(path.RelativePath), "", "", "", TimeSpan.Zero, false)).ToList();
+        rows = new ListCollectionView(shown.Select((track, i) => new TrackRow(i, track, liked.Contains(track.Path))).ToList());
             rows.Filter = RowMatches;
             Songs.ItemsSource = rows;
-            UpdateRowCount();
-        }
+        UpdateRowCount();
         UpdateChrome();
     }
     private bool RowMatches(object obj)
@@ -228,7 +216,7 @@ public partial class MainWindow : Window
     private void SongsSelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateRowCount(); UpdateChrome(); }
     private void UpdateRowCount()
     {
-        if (currentKey == "home" || rows is null) return;
+        if (rows is null) return;
         RowCount.Text = $"{rows.Cast<object>().Count():N0} songs shown · {Songs.SelectedItems.Count:N0} selected" +
             (CurrentPlaylist is not null && !NaturalOrder ? " · Clear filters / sort to rearrange" : "");
     }
@@ -243,10 +231,9 @@ public partial class MainWindow : Window
         }
         else if (session is not null) { DeviceTitle.Text = "Player disconnected"; DeviceDetails.Text = "Reconnect the same Clip+ to send changes"; }
         NewButton.IsEnabled = CanEdit;
-        PlaylistActions.IsEnabled = SongActions.IsEnabled = HomeActions.IsEnabled = ConflictBanner.IsEnabled = CanEdit;
+        PlaylistActions.IsEnabled = SongActions.IsEnabled = ConflictBanner.IsEnabled = CanEdit;
         if (CurrentPlaylist is { } playlist)
         {
-            PinButton.Content = session!.Pins.Any(p => p.PlaylistId == playlist.Id) ? "Unpin" : "Pin to Home";
             RemoveButton.IsEnabled = !playlist.HasConflict && Songs.SelectedItems.Count > 0;
             UpButton.IsEnabled = DownButton.IsEnabled = !playlist.HasConflict && NaturalOrder && Songs.SelectedItems.Count > 0;
         }
@@ -310,7 +297,6 @@ public partial class MainWindow : Window
     { if (CurrentPlaylist is { } p) { var indexes = SelectedIndexes(); Edit(() => session!.Remove(p, indexes)); } }
     private void LikeClick(object sender, RoutedEventArgs e) { var songs = SelectedSongs(); Edit(() => session!.SetLiked(songs, true)); }
     private void UnlikeClick(object sender, RoutedEventArgs e) { var songs = SelectedSongs(); Edit(() => session!.SetLiked(songs, false)); }
-    private void PinClick(object sender, RoutedEventArgs e) { if (CurrentPlaylist is { } p) Edit(() => session!.TogglePin(p)); }
     private void UseInternalClick(object sender, RoutedEventArgs e) { if (CurrentPlaylist is { } p) Edit(() => session!.ResolveConflict(p, false)); }
     private void UseSdClick(object sender, RoutedEventArgs e) { if (CurrentPlaylist is { } p) Edit(() => session!.ResolveConflict(p, true)); }
     private void UpClick(object sender, RoutedEventArgs e) => MoveSongs(-1);
@@ -328,18 +314,6 @@ public partial class MainWindow : Window
         foreach (TrackRow row in Songs.Items) if (wanted.Contains(row.Index)) Songs.SelectedItems.Add(row);
         if (Songs.SelectedItem is not null) Songs.ScrollIntoView(Songs.SelectedItem);
     }
-    private void PinUpClick(object sender, RoutedEventArgs e) => MoveHome(-1);
-    private void PinDownClick(object sender, RoutedEventArgs e) => MoveHome(1);
-    private void MoveHome(int direction)
-    {
-        var index = HomeList.SelectedIndex;
-        if (index < 0 || session is null) return;
-        Edit(() => session.MovePin(index, direction));
-        HomeList.SelectedIndex = Math.Clamp(index + direction, 0, session.Pins.Count - 1);
-    }
-    private void UnpinClick(object sender, RoutedEventArgs e)
-    { var index = HomeList.SelectedIndex; if (index >= 0) Edit(() => session!.RemovePin(index)); }
-
     private void SongsMouseDown(object sender, MouseButtonEventArgs e) { dragStart = e.GetPosition(Songs); dragIndexes = []; }
     private void SongsMouseMove(object sender, MouseEventArgs e)
     {
@@ -379,7 +353,7 @@ public partial class MainWindow : Window
             if (File.Exists(manifest)) File.Move(manifest, Path.Combine(session.PendingBatch.BackupFolder, "abandoned-operation.json"), true);
             await LoadDevice(connected, findRecovery: false);
         }
-        else if (MessageBox.Show(this, "Discard all unsent playlist, like, and Home changes?", "Discard changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        else if (MessageBox.Show(this, "Discard all unsent playlist and like changes?", "Discard changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         { session.Discard(); RefreshNavigation(); StatusText.Text = "Unsent changes discarded."; }
     }
     private async void DevicePicked(object sender, SelectionChangedEventArgs e)
@@ -428,7 +402,6 @@ public partial class MainWindow : Window
         closed = true; timer.Stop(); cancellation.Cancel();
     }
     private sealed record NavItem(string Key, string Label, string Caption);
-    private sealed record PinRow(int Index, string Label);
     private sealed record TrackRow(int Index, Track Track, bool Liked)
     {
         public int Number => Index + 1;

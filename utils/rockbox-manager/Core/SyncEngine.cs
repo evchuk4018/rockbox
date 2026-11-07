@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace RockboxManager.Core;
@@ -31,7 +30,7 @@ public sealed class SyncBatch
         var batch = new SyncBatch { DeviceId = session.Device.Id, InternalId = session.Device.Internal.Id,
             SdId = session.Device.Sd?.Id,
             BackupFolder = Path.Combine(Path.GetFullPath(backupRoot), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]) };
-        var snapshots = session.Playlists.SelectMany(p => p.Copies.Values).Append(session.PinsSnapshot).ToList();
+        var snapshots = session.Playlists.SelectMany(p => p.Copies.Values).ToList();
         var removals = new List<FileSnapshot>();
         foreach (var playlist in session.Playlists.Where(p => p.IsDirty))
         {
@@ -49,14 +48,6 @@ public sealed class SyncBatch
             }
             removals.AddRange(playlist.Copies.Values.Where(copy => playlist.Deleted ||
                 !copy.RelativePath.Equals(playlist.TargetPath, StringComparison.OrdinalIgnoreCase)));
-        }
-        if (session.PinsChanged)
-        {
-            var paths = session.RenderedPins().ToArray();
-            if (paths.Length > 16) throw new InvalidOperationException("Home supports a maximum of 16 pins.");
-            foreach (var path in paths) PlaylistCodec.ValidatePath(path);
-            batch.Changes.Add(new() { Storage = Storage.Internal, RelativePath = EditSession.PinsPath,
-                BeforeHash = session.PinsSnapshot.Hash, Content = Encoding.UTF8.GetBytes(string.Join('\n', paths) + (paths.Length > 0 ? "\n" : "")), Phase = 1 });
         }
         foreach (var old in removals)
         {

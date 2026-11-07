@@ -462,44 +462,6 @@ static void test_sampling_and_refresh(void)
     assert(picks.count == 1);
 }
 
-static void test_pins(void)
-{
-    char pins[HOME_MAX_PINS][MAX_PATH];
-    const char *first = "/Playlists/Beyoncé 歌曲.m3u8";
-    const char *second = "/Playlists/Second.m3u8";
-    assert(home_pins_load(pins) == 0);
-    assert(!home_toggle_pin(first));
-    assert(!home_toggle_pin(second));
-    assert(home_pins_load(pins) == 2);
-    assert(!strcmp(pins[0], first) && !strcmp(pins[1], second));
-    assert(home_playlist_is_pinned(first));
-    fail_write = 1;
-    assert(home_toggle_pin(first) < 0);
-    fail_write = 0;
-    fail_sync = 1;
-    assert(home_toggle_pin(first) < 0);
-    fail_sync = 0;
-    fail_rename = 1;
-    assert(home_toggle_pin(first) < 0);
-    fail_rename = 0;
-    assert(home_pins_load(pins) == 2);
-    assert(home_playlist_is_pinned(first));
-    assert(!home_toggle_pin(first));
-    assert(home_pins_load(pins) == 1 && !strcmp(pins[0], second));
-    assert(!home_toggle_pin(first));
-    assert(home_pins_load(pins) == 2 && !strcmp(pins[1], first));
-    assert(home_toggle_pin("/bad\npath.m3u8") < 0);
-    for (int i = 2; i < HOME_MAX_PINS; i++)
-    {
-        char path[60];
-        snprintf(path, sizeof(path), "/Playlists/Mix %d.m3u8", i);
-        assert(!home_toggle_pin(path));
-    }
-    assert(home_toggle_pin("/Playlists/overflow.m3u8") < 0);
-    assert(home_pins_load(pins) == HOME_MAX_PINS);
-    assert(!home_toggle_pin(first));
-    assert(home_pins_load(pins) == HOME_MAX_PINS - 1);
-}
 
 static void test_playback(void)
 {
@@ -1002,6 +964,33 @@ static void test_batches_and_resume(void)
     global_settings.max_files_in_playlist = 1024;
 }
 
+static void test_manually_queued_autoplay(void)
+{
+    prepare_large(45);
+    start_track(0);
+    struct mp3entry id3;
+    assert(get_metadata(&id3, -1, library[1].path));
+    emit(PLAYBACK_EVENT_TRACK_CHANGE, &id3, TEF_CURRENT);
+    current_playlist.index = current_playlist.amount - 1;
+    assert(playlist_next(1) == 0);
+    prepare_large(45);
+    start_track(0);
+    char manual[MAX_PATH];
+    for (int n = 1; n < 45; n++)
+    {
+        snprintf(manual, sizeof(manual), "/Large/Song %d.mp3", n);
+        bool present = false;
+        for (int i = 0; i < current_playlist.amount; i++)
+            if (!strcmp(queue_paths[i], manual)) present = true;
+        if (!present) break;
+    }
+    assert(get_metadata(&id3, -1, manual));
+    emit(PLAYBACK_EVENT_TRACK_CHANGE, &id3, TEF_CURRENT);
+    current_playlist.index = current_playlist.amount - 1;
+    assert(playlist_next(1) == 0);
+    for (int i = 0; i < current_playlist.amount; i++) assert(strcmp(queue_paths[i], manual));
+}
+
 static void test_batch_weights(void)
 {
     remove(HOME_SCORES_FILE); home_scores_reload();
@@ -1444,19 +1433,19 @@ int main(void)
     assert(home_artist_label(long_credit, artists, 4) == long_credit);
     assert(home_artist_label(NULL, artists, sizeof(artists)) == NULL);
     test_sampling_and_refresh();
-    test_pins();
     test_playback();
     test_scores();
     test_score_malformed();
     test_score_failures();
     test_autoplay();
     test_batches_and_resume();
+    test_manually_queued_autoplay();
     test_batch_weights();
     test_batch_failures_and_missing();
     test_library_sized_memory();
     test_likes();
     test_add_to_playlist();
     test_genre_change();
-    puts("Home sampling, pins, 20-song autoplay batches, scores, persistence, and repeat checks passed.");
+    puts("Home sampling, 20-song autoplay batches, scores, persistence, and repeat checks passed.");
     return 0;
 }

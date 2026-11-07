@@ -40,6 +40,7 @@
 #include "shortcuts.h"
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
+#include "music_library.h"
 #endif
 
 #ifdef HAVE_HOTSWAP
@@ -498,6 +499,9 @@ static const struct root_items items[] = {
     [GO_TO_PLAYLIST_VIEWER] = { playlist_view, NULL, &playlist_options },
     [GO_TO_SYSTEM_SCREEN] = { miscscrn, &info_menu, &system_menu },
     [GO_TO_SHORTCUTMENU] = { do_shortcut_menu, NULL, NULL },
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    [GO_TO_MUSIC_LIBRARY] = { music_library_screen, NULL, NULL },
+#endif
 
 };
 #define NUM_ITEMS (int)(sizeof(items)/sizeof(*items))
@@ -957,6 +961,9 @@ void root_menu(void)
 
     while (true)
     {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+        if (music_library_pending()) next_screen = GO_TO_MUSIC_LIBRARY;
+#endif
         switch (next_screen)
         {
             case MENU_ATTACHED_USB:
