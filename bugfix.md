@@ -145,3 +145,27 @@ These require physical use and were not performed during the USB session:
 The original boot/save warning is now traced to native-open cleanup replacing
 `ENOENT` with `EBADF`. Successful saving and reloading with the corrected native
 open routine still requires the hardware steps above.
+
+## November 7: playback panic during database updates
+
+The reported `audio_reset_bu...` panic on Study → PRIDE. matches the audio
+allocator's fatal out-of-memory path. The song fully decodes without errors;
+the connected internal filesystem passes CHKDSK and the rebuilt 802-track
+database is clean. No panic dump was saved, so the precise hardware timing is
+inferred from the code and the regression reproduction.
+
+Even a scan with no new songs previously rebuilt every index and marked the
+database dirty. Its maximum-sized work allocation left no memory for audio
+started during a yield. A panic could interrupt that dirty commit, causing the
+database initialization prompt after reboot. Empty commits now discard only the
+empty temporary scan. Clip/Clip+ commits request one eighth of RAM (256 KiB /
+1 MiB), retaining memory for playback; failed work-buffer allocations still
+defer the commit before marking the database dirty.
+
+The regression compiles the production commit and audio allocation routines,
+starts playback during index construction, checks no-op scans and failed
+allocations, and runs for both Clip RAM sizes. The old allocator reproduces
+`audio_reset_buffer(): OOM!` in this scenario. Player backup, song verification,
+regression/build logs and installation hashes are under
+`C:\RockboxDev\logs\playback-panic-20261107`. Physical playback after USB
+disconnection remains a user check.

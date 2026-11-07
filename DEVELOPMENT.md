@@ -98,6 +98,18 @@ score file makes the initial index incomplete and blocks all subsequent saves.
 
 The adapters supply the database, metadata and audio events; the checks do not drive GUI or audio playback.
 
+The database/playback regression compiles the production commit and audio-buffer
+allocation functions for both Clip targets. It starts audio while a nonempty
+commit holds its work buffer, checks empty auto-updates do not dirty/rewrite the
+database, and checks allocation failure defers the commit with the old database
+clean. Clip commit work memory is bounded to one eighth of target RAM (256 KiB
+on Clip, 1 MiB on Clip+); do not replace it with `core_alloc_maximum`, which can
+starve a simultaneous playback start. An interrupted dirty commit leaves the
+database unavailable on reboot. Hardware check: start Study → PRIDE. soon after
+boot, repeat during Database → Update Now, then reboot and confirm the database
+is still usable. The host regression checks allocation overlap, not PCM decoding
+or physical controls.
+
 The existing regression checks run in the MSYS2 UCRT64 environment:
 
 ```powershell

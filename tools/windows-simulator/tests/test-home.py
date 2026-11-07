@@ -28,6 +28,27 @@ def function(source, signature):
 
 
 class HomeTests(unittest.TestCase):
+    def test_database_commit_during_playback_start(self):
+        database = (ROOT / "apps/tagcache.c").read_text(encoding="utf-8")
+        playback = (ROOT / "apps/playback.c").read_text(encoding="utf-8")
+        code = (Path(__file__).parent / "tagcache-harness.c").read_text(encoding="utf-8")
+        code = code.replace("/* PRODUCTION_STRUCTS */", "\n".join(
+            function(database, signature) + ";" for signature in (
+                "struct index_entry {", "struct tagcache_header {", "struct master_header {")))
+        code = code.replace("/* PRODUCTION_ALLOCATION */", "\n".join((
+            function(database, "static void allocate_tempbuf(void)"),
+            function(database, "static void free_tempbuf(void)"),
+            function(playback, "static void audio_reset_buffer(void)"))))
+        code = code.replace("/* PRODUCTION_COMMIT */", function(database, "static bool commit(void)"))
+        with tempfile.TemporaryDirectory(prefix="rockbox-db-playback-") as directory:
+            source = Path(directory) / "test.c"
+            source.write_text(code, encoding="utf-8")
+            executable = Path(directory) / "test.exe"
+            for target in ("SANSA_CLIP", "SANSA_CLIPPLUS"):
+                subprocess.run([GCC, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+                                f"-D{target}", str(source), "-o", str(executable)], check=True)
+                subprocess.run([str(executable)], check=True)
+
     def test_seed_preserves_existing_files_and_unicode(self):
         with tempfile.TemporaryDirectory() as directory:
             disk = Path(directory)

@@ -224,6 +224,9 @@ uses this existing index instead of scanning audio files. Use **Update Now**
 after adding, removing, or retagging music; normal listening and restarting do
 not require an update. Home suggestions themselves still work without the
 database, but selecting one asks you to initialize/update it before autoplay.
+Empty automatic updates now leave the database untouched. Database updates on
+Clip/Clip+ use bounded work memory so starting a pinned mix while an update is
+running does not exhaust the audio buffer.
 
 Only Home-autoplay listening earns recommendation points, including a resumed
 Home session. A natural finish earns **2 points**. Skipping, stopping, shutting

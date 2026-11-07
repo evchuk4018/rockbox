@@ -786,7 +786,15 @@ static void allocate_tempbuf(void)
 #else /* !__PCTOOL__ */
     /* Need to pass dummy ops to prevent the buffer being moved
      * out from under us, since we yield during the tagcache commit. */
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    /* Home can start playback while this background commit yields. Taking
+     * all remaining RAM makes audio_reset_buffer() panic on these small
+     * players. A bounded request also lets active audio keep its reserve. */
+    size = MEMORYSIZE * (1024*1024 / 8);
+    tempbuf_handle = core_alloc_ex(size, &buflib_ops_locked);
+#else
     tempbuf_handle = core_alloc_maximum(&size, &buflib_ops_locked);
+#endif
     if (tempbuf_handle > 0)
     {
         tempbuf = core_get_data(tempbuf_handle);
@@ -3415,7 +3423,12 @@ static bool commit(void)
     }
 
     if (tch.entry_count == 0)
+    {
         logf("nothing to commit");
+        close(tmpfd);
+        remove_db_file(TAGCACHE_FILE_TEMP);
+        return true;
+    }
 
     /* Fully initialize existing headers (if any) before going further. */
     tc_stat.ready = check_all_headers();
