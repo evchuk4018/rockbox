@@ -18,3 +18,10 @@ make -j"$jobs" zip
 grep -qx 'Target: sansaclipplus' rockbox-info.txt
 test -s rockbox.sansa
 test -s rockbox.zip
+python3 - "$PWD/rockbox.zip" <<'PY'
+import struct, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as package:
+    font = package.read('.rockbox/fonts/12-ProFont.fnt')
+    assert font[:4] == b'RB12' and struct.unpack_from('<H', font, 6)[0] == 12
+    assert package.read('.rockbox/docs/profontdoc.txt')
+PY

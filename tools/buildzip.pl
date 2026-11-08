@@ -661,7 +661,7 @@ sub buildzip {
         print STDERR "No wps module present, can't do the WPS magic!\n";
     }
 
-    if ($modelname =~ /^(sansaclip|sansaclipplus)$/) {
+    if ($modelname =~ /^"?(sansaclip|sansaclipplus)"?$/) {
         glob_mkdir("$temp_dir/fonts");
         system("$ROOT/tools/convbdf", "-f", "-o", "$temp_dir/fonts/12-ProFont.fnt",
                "$ROOT/fonts/12-ProFont.bdf") == 0 or die "Search font conversion failed";
