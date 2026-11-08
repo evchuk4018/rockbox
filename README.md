@@ -173,6 +173,14 @@ Search includes only indexed files. The simulator's local library can differ
 from the player; after adding a file, use Database → Update Now and restart if
 prompted before searching for it.
 
+The search update was installed on the Clip+ on November 8, 2026, firmware
+**29b328cecb-261108**. All 338 installed build files were hash-verified, and
+68 existing personal/settings/playlist files were verified unchanged. The
+12-pixel search font is included in normal firmware packages. Backup and
+verification records are in `C:\RockboxDev\logs\search-20261108`. Safely eject
+both player volumes, disconnect USB, and restart to load it. Physical keyboard
+and playback checks remain for the disconnected player.
+
 Hold **middle** on a song in Home, Now Playing, playlists, the queue, or database/
 file browsing for the same menu: Play next, Add to queue, Add to playlist,
 Like/Unlike, Go to artist, Go to album, and More. More keeps the original advanced
