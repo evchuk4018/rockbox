@@ -462,3 +462,33 @@ See `verification.json`, `backfill.json`, `installed-file-hashes.json` and
 `device-before/.rockbox`. The matching package is `rockbox.zip` there and in
 `rockbox/build-sansaclipplus`. Safely eject both volumes, disconnect USB and restart
 the Clip+ to load the corrected layout.
+
+## Quality-of-life firmware prepared November 8, 2026
+
+Firmware **cfc4853983-261108** is built and packaged for **Clip+**. It is ready at
+`build-sansaclipplus/rockbox.zip`; no player was connected during this update.
+
+- Albums and its album-name search show groups with at least two indexed songs.
+  Artist pages and direct access to single-song releases retain their behavior.
+- Song search uses Home listening scores, highest first, with deterministic ties.
+  Playback follows the ranked result order.
+- The 61×61 cover stays full size. Title and artist wrap into four and two rows;
+  only overflow on the final row scrolls. Battery, shuffle, playback state,
+  Add to Playlist, and the like heart share the right-hand footer.
+
+Validation: all **nine Home/skin checks and two library checks** passed on Linux,
+including production text drawing, Unicode, score ordering and playback queues.
+The Windows simulator compiled and installed its updated skin and assets. Windows
+Application Control blocked three existing test executions; the complete suites
+passed on the homelab without changing Windows policy. The homelab ARM build used
+two jobs. The firmware archive's **341 files**, target, version, CRCs, skin, six
+bitmap assets and search font passed read-back checks. Downloaded and homelab ZIP
+hashes match: `24991ff575ffe53068ed4d5beae3888a8a1d199571f44f63ab2d7d39d46544f1`.
+
+Source, build/test logs, the package and `verification.json` are preserved under
+`C:/RockboxDev/logs/qol-20261108`. The homelab source/build is
+`/home/evanh/rockbox-qol-20261108`. Connect the Clip+, verify its target, back up
+`.rockbox`, and extract the ZIP into the internal volume's root, merging its
+`.rockbox` folder. Safely eject both volumes, disconnect USB, and restart.
+Visual, button and audio acceptance remain for the user. This firmware update
+does not require a music database rebuild.
