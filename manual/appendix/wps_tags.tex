@@ -894,4 +894,11 @@ a horizontal progressbar which doesn't fill and draws the image
                            up to ten scrolling lines. Scrolling lines can not
                            contain dynamic content such as timers, peak meters
                            or progress bars.\\
+  \config{\%sw(rows)}    & Wrap one aligned text field into at most the given
+                           positive number of rows in a standard skin viewport.
+                           Word boundaries and the font's pixel widths determine
+                           wrapping; oversized words split at UTF-8 characters.
+                           Only overflow on the final row scrolls. The available
+                           viewport height limits the number of rows. Mixed
+                           left/center/right fields use single-line scrolling.\\
 \end{tagmap}

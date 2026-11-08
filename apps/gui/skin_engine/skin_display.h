@@ -52,6 +52,10 @@ int evaluate_conditional(struct gui_wps *gwps, int offset,
 */
 void write_line(struct screen *display, struct align_pos *format_align,
                 int line, bool scroll, struct line_desc *line_desc);
+/* Wrap one aligned text field, scrolling only the final row's overflow.
+ * Returns the reserved row count, limited to the remaining viewport height. */
+int write_wrapped_line(struct screen *display, struct align_pos *format_align,
+                      int line, int rows, struct line_desc *line_desc);
 void draw_peakmeters(struct gui_wps *gwps, int line_number,
                      struct viewport *viewport);
 #ifdef HAVE_ALBUMART

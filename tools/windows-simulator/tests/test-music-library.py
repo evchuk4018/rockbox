@@ -94,6 +94,7 @@ int main(void) {
 #define ATTR_DIRECTORY 16
 #define HZ 100
 #define ARRAYLEN(x) (sizeof(x)/sizeof((x)[0]))
+#define strlcpy library_test_strlcpy
 static size_t strlcpy(char *d,const char *s,size_t n) { size_t l=strlen(s); if(n) {size_t c=l<n-1?l:n-1;memcpy(d,s,c);d[c]=0;}return l; }
 char *strcasestr(const char *,const char *);
 typedef struct { DIR *native; char path[1024]; } test_dir;
@@ -147,12 +148,17 @@ static void action_wait_for_release(void) {release_count++;}
 static int home_liked_state(const char *p) {(void)p;return liked;}
 static void splash(int t,const char *p) {(void)t;(void)p;}
 static int inserted_count;
-static int playlist_insert_track(void *p,const char *s,int where,bool queue,bool sync) {(void)p;assert(queue==sync);strlcpy(affected,s,sizeof(affected));position=where;return queue?0:inserted_count++;}
+static char queued[12][MAX_PATH];
+static int playlist_insert_track(void *p,const char *s,int where,bool queue,bool sync) {(void)p;assert(queue==sync);strlcpy(affected,s,sizeof(affected));position=where;if(queue)return 0;strlcpy(queued[inserted_count],s,MAX_PATH);return inserted_count++;}
 static void playlist_set_modified(void *p,bool b) {(void)p;assert(b);changed++;}
 static void home_autoplay_cancel_genre(void) {cancelled++;}
 static bool catalog_add_track_to_a_playlist(const char *p) {strlcpy(affected,p,sizeof(affected));return true;}
 static int home_toggle_like(const char *p) {strlcpy(affected,p,sizeof(affected));return 1;}
-struct library_track {int title,artist,album,path,disc,number,performer;};
+/* LIBRARY_TRACK */
+static uint32_t score_time=1000,second_score,disc_score;
+static int score_reads;
+static uint32_t home_score_time(void) {return score_time;}
+static uint32_t home_score_get(const char *p,uint32_t now) {assert(now==score_time);score_reads++;return !strcmp(p,"/Second.mp3")?second_score:!strcmp(p,"/Second disc.mp3")?disc_score:0;}
 static struct library_track *tracks;
 static int *visible,track_count,visible_count;
 static char *strings;
@@ -218,7 +224,7 @@ static bool list_do_action(int c,int t,struct gui_synclist *l,int *a) {
 '''
         checks = r'''
 static int put(const char *s,int *used) { int n=*used;strcpy(strings+n,s);*used+=strlen(s)+1;return n; }
-static void add(int i,const char *t,const char *a,const char *l,int d,int n,int *used) {char p[MAX_PATH];snprintf(p,sizeof(p),"/%s.mp3",t);tracks[i]=(struct library_track){put(t,used),put(a,used),put(l,used),put(p,used),d,n,put(a,used)};}
+static void add(int i,const char *t,const char *a,const char *l,int d,int n,int *used) {char p[MAX_PATH];snprintf(p,sizeof(p),"/%s.mp3",t);tracks[i]=(struct library_track){put(t,used),put(a,used),put(l,used),put(p,used),d,n,put(a,used),0};}
 static void reset_ui(enum music_view view) {
     music_library_request(view,NULL);keyboard_index=event_index=0;started=-1;
     memset(keyboard_returns,0,sizeof(keyboard_returns));memset(events,0,sizeof(events));
@@ -246,13 +252,14 @@ int main(void) {
     }
     assert(nested&&top);music_catalog_close();assert(!allocation&&!pins);
     fail_alloc=1;assert(music_catalog_open()==-1);assert(!allocation);fail_alloc=0;
-    struct library_track data[10];int indexes[10];char storage[4096];int used=0;
+    struct library_track data[12];int indexes[12];char storage[4096];int used=0;
     tracks=data;visible=indexes;strings=storage;track_count=6;
     add(0,"Second","A","Same",1,2,&used);add(1,"First","A","Same",1,1,&used);
     add(2,"Different artist","B","Same",1,1,&used);add(3,"A comma","Tyler, The Creator","Other",1,1,&used);
     add(4,"Other album","A","Other",1,1,&used);add(5,"Second disc","A","Same",2,1,&used);
     page=PAGE_ARTISTS;library_rows();assert(visible_count==3);
-    page=PAGE_ALBUMS;library_rows();assert(visible_count==4);
+    page=PAGE_ALBUMS;library_rows();assert(visible_count==1);
+    assert(!strcmp(library_name(1,NULL,name,sizeof(name)),"Same - A"));
     strcpy(artist,"A");page=PAGE_ARTIST_ALBUMS;library_rows();assert(visible_count==2);
     assert(!strcmp(library_name(0,NULL,name,sizeof(name)),"All songs"));
     strcpy(album,"Same");page=PAGE_TRACKS;library_rows();assert(visible_count==3);
@@ -276,7 +283,10 @@ int main(void) {
     assert(!strcmp(library_name(0,NULL,name,sizeof(name)),"Search"));
     strcpy(query,"Second");library_rows();assert(visible_count==0);
     assert(!strcmp(library_name(1,NULL,name,sizeof(name)),"No matches"));
-    page=PAGE_ALBUMS;strcpy(query,"sAM");library_rows();assert(visible_count==2);
+    page=PAGE_ALBUMS;strcpy(query,"sAM");library_rows();assert(visible_count==1);
+    strcpy(query,"other");library_rows();assert(visible_count==0);
+    assert(!strcmp(library_name(0,NULL,name,sizeof(name)),"Search"));
+    assert(!strcmp(library_name(1,NULL,name,sizeof(name)),"No matches"));
     page=PAGE_TRACKS;strcpy(artist,"A");strcpy(album,"Same");library_rows();assert(visible_count==3);
     page=PAGE_SEARCH;strcpy(query,"second");library_rows();assert(visible_count==2);
     assert(!strcmp(library_name(1,NULL,name,sizeof(name)),"Second — A"));
@@ -295,6 +305,16 @@ int main(void) {
     assert(!strcmp(field(tracks[visible[0]].title),"Taking What's Not Yours"));
     strcpy(query,"butter");library_rows();assert(visible_count==1);
     assert(!strcmp(field(tracks[visible[0]].title),"Build Me Up Buttercup (Mono)"));
+    /* Scores are captured once per rebuild, with zero/ties in title order. */
+    strcpy(query,"second");second_score=10;disc_score=UINT32_MAX;
+    int reads=score_reads;library_rows();assert(score_reads==reads+track_count);
+    assert(!strcmp(field(tracks[visible[0]].title),"Second disc"));
+    second_score=UINT32_MAX;disc_score=10;score_time++;library_rows();
+    assert(!strcmp(field(tracks[visible[0]].title),"Second"));
+    second_score=disc_score=10;library_rows();
+    assert(!strcmp(field(tracks[visible[0]].title),"Second"));
+    second_score=disc_score=0;library_rows();
+    assert(!strcmp(field(tracks[visible[0]].title),"Second"));
     /* Production screen: keyboard cancellation, empty input and unavailable resources. */
     reset_ui(MUSIC_SEARCH);keyboard_text[0]="changed";keyboard_returns[0]=-1;
     int before=opened;assert(music_library_screen(NULL)==GO_TO_ROOT&&opened==before);
@@ -303,13 +323,16 @@ int main(void) {
     usable=false;reset_ui(MUSIC_SEARCH);assert(music_library_screen(NULL)==GO_TO_ROOT&&keyboard_index==0);usable=true;
     fail_alloc=1;reset_ui(MUSIC_SEARCH);keyboard_text[0]="second";
     assert(music_library_screen(NULL)==GO_TO_ROOT&&!allocation&&!pins);fail_alloc=0;
-    /* A header is not a song; the second result starts playback at result index one. */
+    /* A header is not a song; playback and context actions use score order. */
+    second_score=50;disc_score=200;
     reset_ui(MUSIC_SEARCH);keyboard_text[0]="second";
     events[0]=(struct event){ACTION_STD_CONTEXT,0,"Search",0};
-    events[1]=(struct event){ACTION_STD_CONTEXT,2,"Second disc — A",0};
-    events[2]=(struct event){ACTION_STD_OK,2,"Second disc — A",2};
+    events[1]=(struct event){ACTION_STD_CONTEXT,2,"Second — A",0};
+    events[2]=(struct event){ACTION_STD_OK,2,"Second — A",2};
     before=context_count;assert(music_library_screen(NULL)==GO_TO_WPS);
-    assert(started==1&&inserted_count==2&&context_count==before+1&&!strcmp(affected,"/Second disc.mp3"));
+    assert(started==1&&inserted_count==2&&context_count==before+1&&!strcmp(affected,"/Second.mp3"));
+    assert(!strcmp(queued[0],"/Second disc.mp3")&&!strcmp(queued[1],"/Second.mp3"));
+    second_score=disc_score=0;
     reset_ui(MUSIC_SEARCH);keyboard_text[0]="second";keyboard_text[1]="destroyed";keyboard_returns[1]=-1;keyboard_text[2]="";
     events[0]=(struct event){ACTION_STD_OK,0,"Search",0};
     events[1]=(struct event){ACTION_STD_CONTEXT,1,"Second — A",0};
@@ -327,17 +350,27 @@ int main(void) {
     assert(music_library_screen(NULL)==GO_TO_ROOT);
     reset_ui(MUSIC_ALBUMS);keyboard_text[0]="same";
     events[0]=(struct event){ACTION_STD_OK,0,"Search",0};
-    events[1]=(struct event){ACTION_STD_OK,2,"Same - B",0};
-    events[2]=(struct event){ACTION_STD_CANCEL,0,"1.01 Different artist",0};
-    events[3]=(struct event){ACTION_STD_CANCEL,2,"Same - B",2};
+    events[1]=(struct event){ACTION_STD_OK,1,"Same - A",0};
+    events[2]=(struct event){ACTION_STD_CANCEL,0,"1.01 First",0};
+    events[3]=(struct event){ACTION_STD_CANCEL,1,"Same - A",1};
     assert(music_library_screen(NULL)==GO_TO_ROOT);
+    /* Hidden single-song albums remain reachable through Go to album. */
+    reset_ui(MUSIC_ALBUM);music_library_request(MUSIC_ALBUM,"/Different artist.mp3");
+    events[0]=(struct event){ACTION_STD_CANCEL,0,"1.01 Different artist",0};
+    events[1]=(struct event){ACTION_STD_CANCEL,0,"Search",0};
+    assert(music_library_screen(NULL)==GO_TO_ROOT);
+    /* Two complete album groups with the same title stay separate. */
+    add(10,"B side","B","Same",1,2,&used);track_count=11;
+    page=PAGE_ALBUMS;strcpy(query,"same");library_rows();assert(visible_count==2);
+    assert(!strcmp(library_name(1,NULL,name,sizeof(name)),"Same - A"));
+    assert(!strcmp(library_name(2,NULL,name,sizeof(name)),"Same - B"));
     reset_ui(MUSIC_SEARCH);keyboard_text[0]="absent";keyboard_text[1]="second";
     events[0]=(struct event){ACTION_STD_OK,1,"No matches",0};
     events[1]=(struct event){ACTION_STD_OK,0,"Search",1};
     events[2]=(struct event){SYS_USB_CONNECTED,1,"Second — A",0};
     assert(music_library_screen(NULL)==GO_TO_ROOT&&!allocation&&!pins&&!themes&&!loaded_fonts);
     assert(stopped==1); /* Browsing and editing leave audio alone. */
-    puts("Catalog >16, nested names, allocation failure, artist/album identity, disc order and frozen song actions passed");
+    puts("Catalog, multi-track albums, score-ranked search/queue, disc order and frozen song actions passed");
 }
 '''
         with tempfile.TemporaryDirectory(prefix="rockbox-library-") as directory:
@@ -349,6 +382,7 @@ int main(void) {
             (catalog / "nested/Duplicate.m3u").write_text("", encoding="utf-8")
             (catalog / "ignored.txt").write_text("", encoding="utf-8")
             source = root / "test.c"
+            prefix = prefix.replace("/* LIBRARY_TRACK */", home.function(production, "struct library_track {") + ";")
             source.write_text(prefix + functions + checks, encoding="utf-8")
             executable = root / "test.exe"
             subprocess.run([home.GCC, "-std=gnu11", "-Wall", "-Wextra", "-Werror", str(source),

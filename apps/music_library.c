@@ -212,7 +212,10 @@ int music_song_menu(const char *path)
 
 /* One exact-size allocation holds the database snapshot, indexes and strings.
  * This deliberately never takes all available RAM away from audio playback. */
-struct library_track { int title, artist, album, path, disc, number, performer; };
+struct library_track {
+    int title, artist, album, path, disc, number, performer;
+    uint32_t score;
+};
 static struct library_track *tracks;
 static int *visible, track_count, visible_count;
 static char *strings;
@@ -246,6 +249,7 @@ static int library_compare(const void *a, const void *b)
     const struct library_track *x = a, *y = b;
     if (song_sort)
     {
+        if (x->score != y->score) return x->score < y->score ? 1 : -1;
         int cmp = strcasecmp(field(x->title), field(y->title));
         if (!cmp) cmp = strcasecmp(field(x->performer), field(y->performer));
         if (!cmp) cmp = strcasecmp(field(x->album), field(y->album));
@@ -356,11 +360,30 @@ static void library_rows(void)
 {
     album_sort = page == PAGE_ALBUMS;
     song_sort = page == PAGE_SEARCH;
+    if (song_sort)
+    {
+        uint32_t now = home_score_time();
+        for (int i = 0; i < track_count; i++)
+        {
+            tracks[i].score = home_score_get(field(tracks[i].path), now);
+            yield();
+        }
+    }
     qsort(tracks, track_count, sizeof(*tracks), library_compare);
     visible_count = 0;
     for (int i = 0; i < track_count; i++)
     {
         struct library_track *track = &tracks[i];
+        if (album_sort)
+        {
+            int end = i + 1;
+            while (end < track_count &&
+                   same(field(track->artist), field(tracks[end].artist)) &&
+                   same(field(track->album), field(tracks[end].album))) end++;
+            if (end - i > 1 && library_matches(track)) visible[visible_count++] = i;
+            i = end - 1;
+            continue;
+        }
         if (!library_matches(track)) continue;
         if (!library_searchable() && !same(field(track->artist), artist)) continue;
         if (page == PAGE_TRACKS && !same(field(track->album), album)) continue;

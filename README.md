@@ -148,7 +148,10 @@ Home; **Left** goes back. Old `home-pins.txt` files are ignored and left untouch
 **Artists** groups by album artist (falling back to track artist), then shows
 albums and All songs. **Albums** lists album title and album artist together;
 same-named albums by different artists remain separate. Album tracks use disc
-and track order, then title. These pages use the existing music database; run
+and track order, then title. The main Albums page and its Search show only albums
+with at least two indexed songs. Single-song releases remain available in song
+search, playlists, artist browsing, and Go to album. Artist pages are unchanged.
+These pages use the existing music database; run
 Database → Update Now after adding music or correcting tags.
 
 **Search** is the first Home row and opens the existing on-screen keyboard.
@@ -157,7 +160,10 @@ key. Move with the arrows and tap middle (**Space** in the simulator) to enter a
 character. **Hold middle/Space to submit**, tap Home (**Insert**) to delete, or
 press Power (**Esc**) to cancel.
 It finds songs by part of their title, track/album artist, or album name,
-ignoring letter case. Results show title and artist, sorted by title; select a
+ignoring letter case. Results show title and artist, sorted by the existing Home
+listening score, highest first. Scores are captured when results are rebuilt;
+unplayed songs have score zero and ties use title, artist, album, then path.
+Select a
 song to play it followed by the remaining results, or hold middle for the shared
 song menu. Search uses the same database across internal storage and the SD card.
 
@@ -232,8 +238,11 @@ Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
 Now Playing uses a single **side-by-side** layout: a full **61×61 cover** on
-the left, with scrolling **song title and artist** on the right. The three-pixel
-progress bar spans the bottom and a small like heart sits above it on the right.
+the left, with **song title and artist wrapping** on the right. The title has up
+to four lines and the artist two. Text wraps at measured word boundaries; only
+overflow on the final line scrolls. The three-pixel progress bar spans the bottom.
+Battery, shuffle, playback state, Add to Playlist, and the like heart share the
+row above it on the right. These icons retain the existing physical shortcuts.
 The cover uses every available row above the bar, without an added border.
 The stacked layout and its setting have been removed. Older saved layout keys
 are ignored. Pause, seek, like and Middle + Up for Add to Playlist keep working.

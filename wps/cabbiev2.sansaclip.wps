@@ -2,15 +2,28 @@
 %wd
 # A 61-pixel square fills every row above the three-pixel progress bar.
 %Cl(0,0,61,61)
+%xl(B,battery-clip.bmp,0,0,9)
+%xl(D,shuffle-clip.bmp,0,0)
+%xl(E,add-playlist-clip.bmp,0,0)
+%xl(F,playmode-clip.bmp,0,0,5)
 %xl(H,heart-clip.bmp,0,0,2)
 %xl(N,cover-missing-clip.bmp,0,0)
 %V(0,0,61,61,1)
 %?C<%Cd|%xd(N)>
 # Song title and performer, never the album title repeated as a second name.
-%V(64,2,64,8,1)
-%ac%s%?it<%it|%fn>
-%V(64,26,64,8,1)
-%ac%s%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>
+%V(64,0,64,32,1)
+%ac%sw(4)%?it<%it|%fn>
+%V(64,34,64,16,1)
+%ac%sw(2)%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>
+# Compact status and playlist cues share the heart's row beside the cover.
+%V(64,51,14,8,1)
+%?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
+%V(79,51,12,8,1)
+%xd(D)
+%V(92,51,9,9,1)
+%?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
+%V(102,51,12,8,1)
+%xd(E)
 %V(117,51,9,8,1)
 %?hL<%xd(Hb)|%xd(Ha)>
 %V(0,61,128,3,1)

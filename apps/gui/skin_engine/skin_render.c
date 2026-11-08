@@ -64,6 +64,7 @@ struct skin_draw_info {
     struct align_pos align;
     bool no_line_break;
     bool line_scrolls;
+    int wrap_rows;
     bool force_redraw;
 
     char *buf;
@@ -103,6 +104,10 @@ static bool do_non_text_tags(struct gui_wps *gwps, struct skin_draw_info *info,
 
     switch (token->type)
     {
+        case SKIN_TOKEN_SUBLINE_WRAP:
+            info->wrap_rows = token->value.l;
+            info->line_scrolls = true;
+            return true;
 #if (LCD_DEPTH > 1) || (defined(HAVE_REMOTE_LCD) && (LCD_REMOTE_DEPTH > 1))
         case SKIN_TOKEN_VIEWPORT_BGCOLOUR:
         case SKIN_TOKEN_VIEWPORT_FGCOLOUR:
@@ -787,6 +792,7 @@ void skin_render_viewport(struct skin_element* viewport, struct gui_wps *gwps,
         linebuf[0] = '\0';
         info.no_line_break = false;
         info.line_scrolls = false;
+        info.wrap_rows = 0;
         info.force_redraw = false;
 #if (LCD_DEPTH > 1) || (defined(HAVE_REMOTE_LCD) && (LCD_REMOTE_DEPTH > 1))
         skin_viewport->fgbg_changed = false;
@@ -822,6 +828,11 @@ void skin_render_viewport(struct skin_element* viewport, struct gui_wps *gwps,
                 update_all = true;
         }
 #endif
+        if (info.wrap_rows &&
+            (!!(align->left && *align->left) + !!(align->center && *align->center) +
+             !!(align->right && *align->right) > 1)) info.wrap_rows = 1;
+        int rows = info.wrap_rows ? MIN(info.wrap_rows,
+            MAX(0, viewport_get_nb_lines(&skin_viewport->vp) - info.line_number)) : 1;
         /* only update if the line needs to be, and there is something to write */
         if (refresh_type && (needs_update || update_all))
         {
@@ -829,13 +840,17 @@ void skin_render_viewport(struct skin_element* viewport, struct gui_wps *gwps,
             {
                 int h = display->getcharheight();
                 display->scroll_stop_viewport_rect(&skin_viewport->vp,
-                    0, info.line_number*h, skin_viewport->vp.width, h);
+                    0, info.line_number*h, skin_viewport->vp.width, rows*h);
             }
-            write_line(display, align, info.line_number,
-                    info.line_scrolls, &info.line_desc);
+            if (info.wrap_rows)
+                rows = write_wrapped_line(display, align, info.line_number,
+                                          rows, &info.line_desc);
+            else
+                write_line(display, align, info.line_number,
+                           info.line_scrolls, &info.line_desc);
         }
         if (!info.no_line_break)
-            info.line_number++;
+            info.line_number += rows;
         line = SKINOFFSETTOPTR(skin_buffer, line->next);
     }
     wps_display_images(gwps, &skin_viewport->vp);

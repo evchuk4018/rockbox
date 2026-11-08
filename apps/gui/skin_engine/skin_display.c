@@ -574,6 +574,60 @@ int evaluate_conditional(struct gui_wps *gwps, int offset,
 }
 
 
+int write_wrapped_line(struct screen *display, struct align_pos *format_align,
+                      int line, int rows, struct line_desc *linedes)
+{
+    char *fields[] = { format_align->left, format_align->center, format_align->right };
+    int alignment = 0, count = 0;
+    for (int i = 0; i < 3; i++)
+        if (fields[i] && fields[i][0]) { alignment = i; count++; }
+    /* Mixed alignments retain the normal single-line behavior. */
+    if (count > 1)
+    {
+        write_line(display, format_align, line, true, linedes);
+        return 1;
+    }
+    int height = display->getcharheight();
+    rows = MIN(rows, MAX(0, display->getheight() / height - line));
+    char empty[] = "";
+    char *text = fields[alignment] ? fields[alignment] : empty;
+    for (int row = 0; row < rows; row++)
+    {
+        while (*text == ' ' || *text == '\t') text++;
+        char *end = text, *space = NULL;
+        if (row == rows - 1)
+            end += strlen(text);
+        else
+        {
+            while (*end)
+            {
+                char *next = end + utf8seek((unsigned char *)end, 1);
+                char saved = *next;
+                int width;
+                *next = 0;
+                display->getstringsize((unsigned char *)text, &width, NULL);
+                *next = saved;
+                if (width > display->getwidth() && end > text) break;
+                if (*end == ' ' || *end == '\t') space = end;
+                end = next;
+                if (width > display->getwidth()) break;
+            }
+            if (*end && *end != ' ' && *end != '\t' && space) end = space;
+        }
+        while (end > text && (end[-1] == ' ' || end[-1] == '\t')) end--;
+        char saved = *end;
+        *end = 0;
+        struct align_pos part = { .left = empty, .center = NULL, .right = NULL };
+        if (alignment == 1) part.center = text;
+        else if (alignment == 2) part.right = text;
+        else part.left = text;
+        write_line(display, &part, line + row, row == rows - 1, linedes);
+        *end = saved;
+        text = end;
+    }
+    return rows;
+}
+
 /* Display a line appropriately according to its alignment format.
    format_align contains the text, separated between left, center and right.
    line is the index of the line on the screen.

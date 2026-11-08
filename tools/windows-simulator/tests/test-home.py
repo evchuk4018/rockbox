@@ -119,7 +119,17 @@ int main(int argc, char **argv) {
         self.assertIn("%?hL<%xd(Hb)|%xd(Ha)>", skin)
         self.assertIn("%?it<%it|%fn>", skin)
         self.assertIn("%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>", skin)
-        for token in ("%id", "%?St", "%Vd", "%pL", "%pR", "%pc", "%pt", "%xd(B", "%xd(D", "%xd(E", "%xd(F"):
+        self.assertIn((64, 0, 64, 32, 1), viewports)
+        self.assertIn((64, 34, 64, 16, 1), viewports)
+        self.assertIn("%sw(4)", skin)
+        self.assertIn("%sw(2)", skin)
+        footer = [v for v in viewports if v[1] == 51]
+        self.assertEqual(len(footer), 5)
+        for a, b in zip(footer, footer[1:]):
+            self.assertLessEqual(a[0] + a[2], b[0])
+        for token in ("%xd(B", "%xd(D)", "%xd(E)", "%xd(F"):
+            self.assertIn(token, skin)
+        for token in ("%id", "%?St", "%Vd", "%pL", "%pR", "%pc", "%pt"):
             self.assertNotIn(token, skin)
         for viewport in viewports[1:-1]:
             self.assertGreaterEqual(viewport[0], 61)
@@ -129,6 +139,24 @@ int main(int argc, char **argv) {
         self.assertEqual(len(placeholder), 550)
         for filename in ("apps/settings.h", "apps/settings_list.c", "apps/menus/display_menu.c"):
             self.assertNotIn("clip_cover_layout", (ROOT / filename).read_text())
+
+    def test_wrapped_skin_text(self):
+        production = (ROOT / "apps/gui/skin_engine/skin_display.c").read_text(encoding="utf-8")
+        code = (Path(__file__).parent / "skin-wrap-harness.c").read_text(encoding="utf-8")
+        code = code.replace("/* PRODUCTION_TEXT */", "\n".join(
+            function(production, signature) for signature in (
+                "void write_line(", "int write_wrapped_line(")))
+        unicode = (ROOT / "firmware/common/unicode.c").read_text(encoding="utf-8")
+        code = code.replace("/* PRODUCTION_UTF8 */", function(unicode, "int utf8seek("))
+        parser = (ROOT / "apps/gui/skin_engine/skin_parser.c").read_text(encoding="utf-8")
+        code = code.replace("/* PRODUCTION_WRAP_TAG */", function(parser, "case SKIN_TOKEN_SUBLINE_WRAP:"))
+        with tempfile.TemporaryDirectory(prefix="rockbox-skin-wrap-") as directory:
+            source = Path(directory) / "test.c"
+            source.write_text(code, encoding="utf-8")
+            executable = source.with_suffix(".exe")
+            subprocess.run([GCC, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+                            str(source), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
 
     def test_mono_albumart_polarity_and_missing_handle(self):
         production = function((ROOT / "apps/gui/skin_engine/skin_display.c").read_text(), "void draw_album_art(")

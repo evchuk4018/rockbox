@@ -197,6 +197,7 @@ static const struct tag_info legal_tags[] =
     TAG(SKIN_TOKEN_RDS_TEXT,              "tz", "", SKIN_REFRESH_DYNAMIC),
 
     TAG(SKIN_TOKEN_SUBLINE_SCROLL,        "s", "", SKIN_REFRESH_SCROLL),
+    TAG(SKIN_TOKEN_SUBLINE_WRAP,          "sw", "I", SKIN_REFRESH_SCROLL),
     TAG(SKIN_TOKEN_SUBLINE_TIMEOUT,       "t"  , "D|d", 0),
 
     TAG(SKIN_TOKEN_ENABLE_THEME,          "we", "", 0|NOBREAK),

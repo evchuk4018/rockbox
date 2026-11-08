@@ -2447,6 +2447,13 @@ static int skin_element_callback(struct skin_element* element, void* data)
             /* Some tags need special handling for the tag, so add them here */
             switch (token->type)
             {
+                case SKIN_TOKEN_SUBLINE_WRAP:
+                {
+                    int rows = get_param(element, 0)->data.number;
+                    if (rows < 1) return CALLBACK_ERROR;
+                    token->value.l = rows;
+                    break;
+                }
                 case SKIN_TOKEN_ALIGN_LANGDIRECTION:
                     follow_lang_direction = 2;
                     break;

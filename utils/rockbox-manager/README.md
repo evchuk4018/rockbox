@@ -51,9 +51,11 @@ edit tags, update firmware or scores, play audio, or eject the player.
 ## Album artwork
 
 The Clip/Clip+ firmware in this repository supports PC-prepared monochrome BMPs.
-Now Playing has one layout: a borderless **61×61 cover** left, scrolling **song
-title and artist** right, a three-pixel progress bar across the bottom, and a
-small like heart above it on the right. There is no layout selection. Existing
+Now Playing has one layout: a borderless **61×61 cover** left, **song title and
+artist wrapping** into up to four and two lines on the right, and a three-pixel
+progress bar across the bottom. Only the final text row scrolls if it overflows.
+Battery, shuffle, playback state, Add to Playlist, and the like heart share the
+row above the bar beside the cover. There is no layout selection. Existing
 pause, like and Add to Playlist button shortcuts keep working.
 
 Manager first checks embedded front artwork, track-specific local images, and
