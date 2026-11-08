@@ -30,6 +30,7 @@
 #include "talk.h"
 #include "kernel.h"
 #include "viewport.h"
+#include "keyboard.h"
 
 static bool pending;
 static enum music_view requested;
@@ -210,12 +211,12 @@ int music_song_menu(const char *path)
 
 /* One exact-size allocation holds the database snapshot, indexes and strings.
  * This deliberately never takes all available RAM away from audio playback. */
-struct library_track { int title, artist, album, path, disc, number; };
+struct library_track { int title, artist, album, path, disc, number, performer; };
 static struct library_track *tracks;
 static int *visible, track_count, visible_count;
 static char *strings;
-static bool album_sort;
-static char fields[4][TAG_MAXLEN];
+static bool album_sort, song_sort;
+static char fields[5][TAG_MAXLEN];
 static struct tagcache_search search;
 static const char *field(int offset) { return strings + offset; }
 
@@ -227,17 +228,28 @@ static size_t read_fields(void)
         fields[i][0] = 0;
         tagcache_retrieve(&search, search.idx_id, tags[i], fields[i], sizeof(fields[i]));
     }
+    fields[4][0] = 0;
+    tagcache_retrieve(&search, search.idx_id, tag_artist, fields[4], sizeof(fields[4]));
     if (!fields[1][0] || !strcmp(fields[1], UNTAGGED))
-        tagcache_retrieve(&search, search.idx_id, tag_artist, fields[1], sizeof(fields[1]));
+        strlcpy(fields[1], fields[4], sizeof(fields[1]));
+    if (!fields[4][0] || !strcmp(fields[4], UNTAGGED))
+        strlcpy(fields[4], fields[1], sizeof(fields[4]));
     if (!fields[0][0] || !strcmp(fields[0], UNTAGGED))
         strlcpy(fields[0], strrchr(fields[3], '/') + 1, sizeof(fields[0]));
     size_t bytes = 0;
-    for (int i = 0; i < 4; i++) bytes += strlen(fields[i]) + 1;
+    for (int i = 0; i < 5; i++) bytes += strlen(fields[i]) + 1;
     return bytes;
 }
 static int library_compare(const void *a, const void *b)
 {
     const struct library_track *x = a, *y = b;
+    if (song_sort)
+    {
+        int cmp = strcasecmp(field(x->title), field(y->title));
+        if (!cmp) cmp = strcasecmp(field(x->performer), field(y->performer));
+        if (!cmp) cmp = strcasecmp(field(x->album), field(y->album));
+        return cmp ? cmp : strcmp(field(x->path), field(y->path));
+    }
     int cmp = strcasecmp(field(album_sort ? x->album : x->artist),
                          field(album_sort ? y->album : y->artist));
     if (!cmp) cmp = strcasecmp(field(album_sort ? x->artist : x->album),
@@ -276,8 +288,9 @@ static int library_open(void)
         if (track_count >= count || length > bytes - used)
         { tagcache_search_finish(&search); goto fail; }
         struct library_track *track = &tracks[track_count++];
-        int *offsets[] = { &track->title, &track->artist, &track->album, &track->path };
-        for (int i = 0; i < 4; i++)
+        int *offsets[] = { &track->title, &track->artist, &track->album,
+                          &track->path, &track->performer };
+        for (int i = 0; i < 5; i++)
         {
             *offsets[i] = used;
             length = strlen(fields[i]) + 1;
@@ -296,19 +309,56 @@ fail:
     return -1;
 }
 
-enum library_page { PAGE_ARTISTS, PAGE_ALBUMS, PAGE_ARTIST_ALBUMS, PAGE_TRACKS, PAGE_ARTIST_TRACKS };
+enum library_page { PAGE_ARTISTS, PAGE_ALBUMS, PAGE_ARTIST_ALBUMS, PAGE_TRACKS, PAGE_ARTIST_TRACKS, PAGE_SEARCH };
 static enum library_page page;
-static char artist[TAG_MAXLEN], album[TAG_MAXLEN];
+static char artist[TAG_MAXLEN], album[TAG_MAXLEN], query[MAX_PATH];
 static bool same(const char *a, const char *b) { return !strcasecmp(a, b); }
+static bool library_searchable(void)
+{
+    return page == PAGE_ARTISTS || page == PAGE_ALBUMS || page == PAGE_SEARCH;
+}
+static int library_header_rows(void)
+{
+    return library_searchable() || page == PAGE_ARTIST_ALBUMS;
+}
+static bool library_matches(const struct library_track *track)
+{
+    if (!query[0] || !library_searchable()) return true;
+    if (page == PAGE_ARTISTS) return strcasestr(field(track->artist), query) != NULL;
+    if (page == PAGE_ALBUMS) return strcasestr(field(track->album), query) != NULL;
+    return strcasestr(field(track->title), query) ||
+           strcasestr(field(track->performer), query) ||
+           strcasestr(field(track->artist), query) ||
+           strcasestr(field(track->album), query);
+}
+/* Work on a copy: the keyboard also modifies its buffer when canceled. */
+static bool library_edit_query(void)
+{
+    /* Search ignores case: one alphabet, digits and a visible space key. */
+    ucschar_t layout[] = {
+        13, 'a','b','c','d','e','f','g','h','i','j','k','l','m',
+        13, 'n','o','p','q','r','s','t','u','v','w','x','y','z',
+        11, '0','1','2','3','4','5','6','7','8','9',0x2423,
+        0xFEFF
+    };
+    char text[sizeof(query)];
+    strlcpy(text, query, sizeof(text));
+    action_wait_for_release();
+    if (kbd_input(text, sizeof(text), layout) < 0) return false;
+    strlcpy(query, text, sizeof(query));
+    return true;
+}
 static void library_rows(void)
 {
     album_sort = page == PAGE_ALBUMS;
+    song_sort = page == PAGE_SEARCH;
     qsort(tracks, track_count, sizeof(*tracks), library_compare);
     visible_count = 0;
     for (int i = 0; i < track_count; i++)
     {
         struct library_track *track = &tracks[i];
-        if (page >= PAGE_ARTIST_ALBUMS && !same(field(track->artist), artist)) continue;
+        if (!library_matches(track)) continue;
+        if (!library_searchable() && !same(field(track->artist), artist)) continue;
         if (page == PAGE_TRACKS && !same(field(track->album), album)) continue;
         if (visible_count && page <= PAGE_ARTIST_ALBUMS)
         {
@@ -323,11 +373,15 @@ static void library_rows(void)
 static const char *library_name(int item, void *unused, char *buf, size_t size)
 {
     (void)unused;
+    if (library_searchable() && item-- == 0) return str(LANG_SEARCH);
     if (page == PAGE_ARTIST_ALBUMS && item-- == 0) return str(LANG_MUSIC_ALL_SONGS);
+    if (item >= visible_count) return str(LANG_MUSIC_NO_MATCHES);
     struct library_track *track = &tracks[visible[item]];
     if (page == PAGE_ARTISTS) return field(track->artist);
     if (page == PAGE_ARTIST_ALBUMS) return field(track->album);
-    if (page == PAGE_ALBUMS)
+    if (page == PAGE_SEARCH)
+        snprintf(buf, size, "%s — %s", field(track->title), field(track->performer));
+    else if (page == PAGE_ALBUMS)
         snprintf(buf, size, "%s - %s", field(track->album), field(track->artist));
     else if (track->number > 0)
         snprintf(buf, size, "%d.%02d %s", track->disc > 0 ? track->disc : 1,
@@ -340,13 +394,15 @@ int music_library_screen(void *unused)
     (void)unused;
     enum music_view view = requested;
     pending = false;
+    query[0] = 0;
     if (!tagcache_is_usable())
     { splash(HZ * 3, ID2P(LANG_HOME_DATABASE)); return GO_TO_ROOT; }
+    if (view == MUSIC_SEARCH && (!library_edit_query() || !query[0])) return GO_TO_ROOT;
     splash(0, ID2P(LANG_WAIT));
     int handle = library_open();
     if (handle < 0) { splash(HZ * 2, ID2P(LANG_FAILED)); return GO_TO_ROOT; }
     bool root_artists = view == MUSIC_ARTISTS || view == MUSIC_ARTIST;
-    page = root_artists ? PAGE_ARTISTS : PAGE_ALBUMS;
+    page = view == MUSIC_SEARCH ? PAGE_SEARCH : root_artists ? PAGE_ARTISTS : PAGE_ALBUMS;
     artist[0] = album[0] = 0;
     if (view == MUSIC_ARTIST || view == MUSIC_ALBUM)
     {
@@ -368,15 +424,19 @@ int music_library_screen(void *unused)
     FOR_NB_SCREENS(i) viewportmanager_theme_enable(i, true, NULL);
     gui_synclist_init(&list, library_name, NULL, false, 1, NULL);
     bool reload = true;
+    int saved_selection[PAGE_SEARCH + 1] = {0};
+    int restore_selection = 0;
     while (true)
     {
         if (reload)
         {
             library_rows();
             gui_synclist_set_title(&list, page == PAGE_ARTISTS ? (const char *)str(LANG_ARTISTS) :
-                page == PAGE_ALBUMS ? (const char *)str(LANG_ALBUMS) : page == PAGE_TRACKS ? album : artist, Icon_Audio);
-            gui_synclist_set_nb_items(&list, visible_count + (page == PAGE_ARTIST_ALBUMS));
-            gui_synclist_select_item(&list, 0);
+                page == PAGE_ALBUMS ? (const char *)str(LANG_ALBUMS) :
+                page == PAGE_SEARCH ? query : page == PAGE_TRACKS ? album : artist, Icon_Audio);
+            gui_synclist_set_nb_items(&list, (visible_count ? visible_count : 1) + library_header_rows());
+            gui_synclist_select_item(&list, restore_selection);
+            restore_selection = 0;
             reload = false;
         }
         gui_synclist_draw(&list);
@@ -385,18 +445,28 @@ int music_library_screen(void *unused)
         int selected = gui_synclist_get_sel_pos(&list);
         if (action == ACTION_STD_CANCEL)
         {
-            if (page == PAGE_ARTISTS || page == PAGE_ALBUMS) break;
+            if (library_searchable()) break;
             page = (page == PAGE_TRACKS || page == PAGE_ARTIST_TRACKS) && root_artists ?
                 PAGE_ARTIST_ALBUMS : root_artists ? PAGE_ARTISTS : PAGE_ALBUMS;
+            restore_selection = saved_selection[page];
             reload = true;
         }
         else if (action == ACTION_STD_MENU) break;
         else if (action == ACTION_TREE_WPS) { if (audio_status()) result = GO_TO_WPS; break; }
+        else if (action == ACTION_STD_OK && library_searchable() && selected == 0)
+        {
+            if (library_edit_query())
+            {
+                if (page == PAGE_SEARCH && !query[0]) break;
+                reload = true;
+            }
+        }
         else if (action == ACTION_STD_OK && visible_count)
         {
+            saved_selection[page] = selected;
             if (page == PAGE_ARTIST_ALBUMS && selected == 0)
             { page = PAGE_ARTIST_TRACKS; reload = true; continue; }
-            int row = selected - (page == PAGE_ARTIST_ALBUMS);
+            int row = selected - library_header_rows();
             struct library_track *track = &tracks[visible[row]];
             if (page <= PAGE_ARTIST_ALBUMS)
             {
@@ -416,17 +486,18 @@ int music_library_screen(void *unused)
                 {
                     int inserted = playlist_insert_track(NULL, field(tracks[visible[i]].path), PLAYLIST_INSERT_LAST, false, false);
                     if (inserted < 0) { ok = false; break; }
-                    if (i == selected) start = inserted;
+                    if (i == row) start = inserted;
                 }
                 playlist_sync(NULL);
                 if (ok && start >= 0) { playlist_start(start, 0, 0); result = GO_TO_WPS; break; }
                 splash(HZ * 2, ID2P(LANG_FAILED));
             }
         }
-        else if (action == ACTION_STD_CONTEXT && page >= PAGE_TRACKS && visible_count)
+        else if (action == ACTION_STD_CONTEXT && page >= PAGE_TRACKS && visible_count &&
+                 selected >= library_header_rows())
         {
             char path[MAX_PATH];
-            strlcpy(path, field(tracks[visible[selected]].path), sizeof(path));
+            strlcpy(path, field(tracks[visible[selected - library_header_rows()]].path), sizeof(path));
             int ret = onplay(path, FILE_ATTR_AUDIO, CONTEXT_TREE, false, ONPLAY_NO_CUSTOMACTION);
             if (pending || ret == ONPLAY_MAINMENU) break;
             if (ret == ONPLAY_START_PLAY) { result = GO_TO_WPS; break; }

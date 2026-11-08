@@ -17572,3 +17572,18 @@
     *: "All songs"
   </voice>
 </phrase>
+
+<phrase>
+  id: LANG_MUSIC_NO_MATCHES
+  desc: Empty Clip music search result list
+  user: core
+  <source>
+    *: "No matches"
+  </source>
+  <dest>
+    *: "No matches"
+  </dest>
+  <voice>
+    *: "No matches"
+  </voice>
+</phrase>

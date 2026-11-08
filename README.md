@@ -113,7 +113,7 @@ Insert for Home, and F1 for key help. Enter is not mapped to Select.
 ## Song-first Home
 
 The Sansa Clip and Clip+ targets open a scrolling Home list beneath the
-existing header: three liked-song suggestions, every playlist in the configured
+existing header: **Search**, three liked-song suggestions, every playlist in the configured
 catalog (normally `/Playlists`), **Artists**, **Albums**, then **Settings**.
 Playlists are alphabetized, nested folders are included, and duplicate names
 show their relative folder. The final Settings entry opens the former Home menu.
@@ -150,6 +150,28 @@ albums and All songs. **Albums** lists album title and album artist together;
 same-named albums by different artists remain separate. Album tracks use disc
 and track order, then title. These pages use the existing music database; run
 Database → Update Now after adding music or correcting tags.
+
+**Search** is the first Home row and opens the existing on-screen keyboard.
+The search keyboard has one lowercase alphabet, digits, and an outlined space
+key. Move with the arrows and tap middle (**Space** in the simulator) to enter a
+character. **Hold middle/Space to submit**, tap Home (**Insert**) to delete, or
+press Power (**Esc**) to cancel.
+It finds songs by part of their title, track/album artist, or album name,
+ignoring letter case. Results show title and artist, sorted by title; select a
+song to play it followed by the remaining results, or hold middle for the shared
+song menu. Search uses the same database across internal storage and the SD card.
+
+**Artists** and **Albums** each start with their own Search row, filtering only
+artist names or album titles respectively. Opening a match shows its complete
+contents; Left restores the filtered parent and selected row. Search remains at
+the top so you can edit your query, including when there are no matches.
+Canceling an edit keeps the old query; submitting an empty query clears the
+artist/album filter or returns Home from song search. Queries last only until
+you leave the browser. Unicode text is supported with Rockbox's existing
+matching rules; accents are not removed. Typing and browsing keep music playing.
+Search includes only indexed files. The simulator's local library can differ
+from the player; after adding a file, use Database → Update Now and restart if
+prompted before searching for it.
 
 Hold **middle** on a song in Home, Now Playing, playlists, the queue, or database/
 file browsing for the same menu: Play next, Add to queue, Add to playlist,

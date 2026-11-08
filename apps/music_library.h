@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-enum music_view { MUSIC_ARTISTS, MUSIC_ALBUMS, MUSIC_ARTIST, MUSIC_ALBUM };
+enum music_view { MUSIC_ARTISTS, MUSIC_ALBUMS, MUSIC_ARTIST, MUSIC_ALBUM, MUSIC_SEARCH };
 void music_library_request(enum music_view view, const char *path);
 bool music_library_pending(void);
 int music_library_screen(void *unused);

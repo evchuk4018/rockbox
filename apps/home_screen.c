@@ -82,6 +82,7 @@ static int song_rows(void)
 static const char *item_name(int item, void *data, char *buf, size_t size)
 {
     (void)data;
+    if (item-- == 0) return str(LANG_SEARCH);
     if (item < song_rows())
         return picks.count ? picks.songs[item].label :
                              (const char *)str(LANG_HOME_NO_LIKED);
@@ -94,6 +95,7 @@ static const char *item_name(int item, void *data, char *buf, size_t size)
 static enum themable_icons item_icon(int item, void *data)
 {
     (void)data;
+    if (item-- == 0) return Icon_Submenu_Entered;
     if (item < song_rows())
         return Icon_Audio;
     return item < song_rows() + playlist_count ? Icon_Playlist : Icon_Submenu_Entered;
@@ -133,7 +135,7 @@ int home_screen(void)
             playlist_count = 0;
             splash(HZ * 2, ID2P(LANG_FAILED));
         }
-        gui_synclist_set_nb_items(&list, song_rows() + playlist_count + 3);
+        gui_synclist_set_nb_items(&list, song_rows() + playlist_count + 4);
         gui_synclist_select_item(&list, MIN(home_selection, list.nb_items - 1));
         FOR_NB_SCREENS(i)
             sb_set_persistent_title(str(LANG_ROCKBOX_TITLE), Icon_Rockbox, i);
@@ -156,13 +158,19 @@ int home_screen(void)
             if (gui_synclist_do_button(&list, &action))
                 continue;
             home_selection = gui_synclist_get_sel_pos(&list);
-            int pin = home_selection - song_rows();
+            int song = home_selection - 1;
+            int pin = song - song_rows();
             switch (action)
             {
                 case ACTION_STD_OK:
-                    if (home_selection < picks.count)
+                    if (home_selection == 0)
                     {
-                        result = home_play_suggestion(picks.songs[home_selection].path);
+                        music_library_request(MUSIC_SEARCH, NULL);
+                        goto done;
+                    }
+                    if (song >= 0 && song < picks.count)
+                    {
+                        result = home_play_suggestion(picks.songs[song].path);
                         goto done;
                     }
                     if (pin >= 0 && pin < playlist_count)
@@ -198,9 +206,9 @@ int home_screen(void)
                     }
                     break;
                 case ACTION_STD_CONTEXT:
-                    if (home_selection < picks.count)
+                    if (song >= 0 && song < picks.count)
                     {
-                        int ret = onplay(picks.songs[home_selection].path, FILE_ATTR_AUDIO,
+                        int ret = onplay(picks.songs[song].path, FILE_ATTR_AUDIO,
                                          CONTEXT_TREE, false, ONPLAY_NO_CUSTOMACTION);
                         if (ret == ONPLAY_MAINMENU) goto done;
                         if (ret == ONPLAY_START_PLAY) { result = GO_TO_WPS; goto done; }

@@ -335,3 +335,26 @@ Home return states and selected-song capture). Run
 `python tools/windows-simulator/tests/test-music-tags.py` for real MP3/Opus tag
 writes and encoded-audio verification. The existing Home suite also checks
 manually inserted songs inside and outside an autoplay pool before the next batch.
+
+Home requests `MUSIC_SEARCH` through the existing library dispatcher. The browser
+reuses its measured database snapshot and visible-row indexes for case-insensitive
+substring searches: song title, track artist, album artist or album on Home;
+album artist names on Artists; album titles on Albums. Track artists are stored
+separately so guest performers remain searchable without changing album grouping.
+Search headers are excluded from result indexes for playback and song actions.
+Filters apply only to their root page; each drilled page restores its parent's
+selection on Back. Query edits use a temporary keyboard buffer so cancellation
+cannot change the active filter. Queries are not persisted.
+Search passes a three-row custom layout to the existing keyboard: lowercase
+letters, digits, and its visible space key. The normal hold-middle submit,
+Home delete, and Power cancel controls are preserved. Other text-entry layouts
+are unchanged.
+
+The music-library harness also runs the production screen with scripted list and
+keyboard services. It checks search scopes, case/partial and Unicode matches,
+empty results, canceled/cleared queries, complete drill-down and return selection,
+result playback offsets, song actions, database/allocation failure and USB cleanup.
+It links Rockbox's actual substring matcher. Manual acceptance in the simulator
+and disconnected player: Home Search -> keyboard -> song results; Artists/Albums
+Search -> filter -> full contents -> Back; clear/cancel/no matches; long-press a
+result; select the second result; repeat while audio is playing or paused.
