@@ -16,12 +16,12 @@ static class ArtworkTests
         {
             var white = CoverConverter.Convert(Solid(255)); var black = CoverConverter.Convert(Solid(0));
             check(CoverConverter.IsCover(white) && white.SequenceEqual(CoverConverter.Convert(Solid(255))));
-            check(white[54] == 0 && white[58] == 255 && white.Length == 414);
+            check(white[54] == 0 && white[58] == 255 && white.Length == 550);
             check(black.Skip(62).All(b => b == 0));
-            check(white[62 + 2 * 8] == 0x3f && white[62 + 2 * 8 + 5] == 0xc0);
-            check(Enumerable.Range(0, 44).All(y => white[62 + y * 8 + 6] == 0 && white[62 + y * 8 + 7] == 0));
-            var pixels = new bool[44 * 44]; pixels[0] = true;
-            check(CoverConverter.Bitmap(pixels)[62 + 43 * 8] == 128 && CoverConverter.Bitmap(pixels)[62] == 0);
+            check(white[62] == 255 && white[62 + 7] == 0xf8);
+            check(Enumerable.Range(0, 61).All(y => white[62 + y * 8 + 6] == 255 && white[62 + y * 8 + 7] == 0xf8));
+            var pixels = new bool[61 * 61]; pixels[0] = true;
+            check(CoverConverter.Bitmap(pixels)[62 + 60 * 8] == 128 && CoverConverter.Bitmap(pixels)[62] == 0);
         });
         test("Transparent art composites on black and centered crop excludes wide borders", () =>
         {
@@ -105,7 +105,7 @@ static class ArtworkTests
         test("Long artwork paths fall back centrally and sanitized album collisions are refused", () =>
         {
             var track = Song(file: new string('é', 119) + ".mp3");
-            check(ArtworkService.Destination(track, [track]) is { Item1: Storage.Internal, Item2: ".rockbox/albumart/Artist-Album.44x44.bmp" });
+            check(ArtworkService.Destination(track, [track]) is { Item1: Storage.Internal, Item2: ".rockbox/albumart/Artist-Album.61x61.bmp" });
             var a = track with { Album = "A/B" }; var b = Song("A?B");
             check(ArtworkService.Destination(a, [a, b]) is null);
             var huge = track with { Album = new string('é', 150) };
@@ -115,8 +115,8 @@ static class ArtworkTests
         {
             using var fixture = new Fixture(); var session = EditSession.Load(fixture.Device); var audio = fixture.AudioHashes();
             var bitmap = CoverConverter.Convert(Solid(255));
-            session.ArtworkChanges.Add(new() { Storage = Storage.Sd, RelativePath = "M/a.44x44.bmp", ArtworkTrack = Song().Path, Content = bitmap });
-            session.ArtworkChanges.Add(new() { Storage = Storage.Sd, RelativePath = "M/b.44x44.bmp", ArtworkTrack = Song(file: "b.mp3").Path, Content = bitmap });
+            session.ArtworkChanges.Add(new() { Storage = Storage.Sd, RelativePath = "M/a.61x61.bmp", ArtworkTrack = Song().Path, Content = bitmap });
+            session.ArtworkChanges.Add(new() { Storage = Storage.Sd, RelativePath = "M/b.61x61.bmp", ArtworkTrack = Song(file: "b.mp3").Path, Content = bitmap });
             var batch = SyncBatch.Build(session, fixture.Backups); check(batch.RequiresSd);
             var first = new SyncEngine(new FaultFiles { FailAtWrite = 2 }).Execute(batch, () => fixture.Device); check(!first.Success && first.Completed == 1);
             var saved = JsonSerializer.Deserialize<SyncBatch>(File.ReadAllText(Path.Combine(batch.BackupFolder, "operation.json")))!;
@@ -126,7 +126,7 @@ static class ArtworkTests
         test("Artwork write boundary refuses forged formats, traversal and firmware targets", () =>
         {
             using var fixture = new Fixture();
-            foreach (var relative in new[] { ".rockbox/config.cfg", ".rockbox/firmware.44x44.bmp", "M/../b.44x44.bmp", "M/other.44x44.bmp" })
+            foreach (var relative in new[] { ".rockbox/config.cfg", ".rockbox/firmware.61x61.bmp", "M/../b.61x61.bmp", "M/other.61x61.bmp" })
             {
                 bool rejected = false;
                 try { SyncEngine.SafePath(fixture.Device, new() { Storage = Storage.Sd, RelativePath = relative, ArtworkTrack = Song().Path, Content = CoverConverter.Convert(Solid(0)) }); }
@@ -134,14 +134,14 @@ static class ArtworkTests
                 check(rejected);
             }
             bool bad = false;
-            try { SyncEngine.SafePath(fixture.Device, new() { Storage = Storage.Sd, RelativePath = "M/a.44x44.bmp", ArtworkTrack = Song().Path, Content = [1, 2, 3] }); }
+            try { SyncEngine.SafePath(fixture.Device, new() { Storage = Storage.Sd, RelativePath = "M/a.61x61.bmp", ArtworkTrack = Song().Path, Content = [1, 2, 3] }); }
             catch (InvalidOperationException) { bad = true; }
             check(bad);
         });
         test("An installed generated cover stays available offline without being converted again", () =>
         {
             using var fixture = new Fixture(); var bmp = CoverConverter.Convert(Solid(255));
-            File.WriteAllBytes(Path.Combine(fixture.Device.Sd!.Root, "M/a.44x44.bmp"), bmp);
+            File.WriteAllBytes(Path.Combine(fixture.Device.Sd!.Root, "M/a.61x61.bmp"), bmp);
             var handler = new FakeHttp(_ => throw new Exception("Offline cover should not make a request"));
             using var http = new HttpClient(handler);
             var service = new ArtworkService(Path.Combine(fixture.Root, "Cache"), _ => throw new NotSupportedException(), http);
@@ -180,6 +180,23 @@ static class ArtworkTests
             check(service.ImportVerifiedReview(review, [Song() with { Duration = TimeSpan.FromSeconds(10) }]) == 0);
             check(service.ImportVerifiedReview(review, [Song()]) == 1);
             check(File.Exists(Path.Combine(fixture.Root, "Cache/verified-release-hints.json")));
+        });
+        test("Legacy covers migrate offline without their old padding and old sends remain recoverable", () =>
+        {
+            using var fixture = new Fixture();
+            var white = new bool[44 * 44]; var oldImage = Solid(0, width: 44, height: 44);
+            for (int y = 2; y < 42; y++) for (int x = 2; x < 42; x++)
+            { white[y * 44 + x] = true; for (int c = 0; c < 3; c++) oldImage.Pixels[(y * 44 + x) * 4 + c] = 255; }
+            var legacy = CoverConverter.Bitmap(white, 44);
+            File.WriteAllBytes(Path.Combine(fixture.Device.Sd!.Root, "M/a.44x44.bmp"), legacy);
+            using var http = new HttpClient(new FakeHttp(_ => throw new Exception("Legacy migration must work offline")));
+            var service = new ArtworkService(Path.Combine(fixture.Root, "Cache"), _ => oldImage, http);
+            var result = service.Prepare(fixture.Device, [Song()]).GetAwaiter().GetResult()[0];
+            check(result.Status == "Ready" && result.RelativePath == "M/a.61x61.bmp" &&
+                result.Bitmap!.SequenceEqual(CoverConverter.Convert(Solid(255))));
+            check(File.ReadAllBytes(Path.Combine(fixture.Device.Sd.Root, "M/a.44x44.bmp")).SequenceEqual(legacy));
+            check(SyncEngine.SafePath(fixture.Device, new() { Storage = Storage.Sd, RelativePath = "M/a.44x44.bmp",
+                ArtworkTrack = Song().Path, Content = legacy }).EndsWith("a.44x44.bmp"));
         });
     }
 }

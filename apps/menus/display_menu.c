@@ -621,16 +621,10 @@ static int codepage_callback(int action,
 
 MENUITEM_SETTING(codepage_setting, &global_settings.default_codepage, codepage_callback);
 
-#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
-MENUITEM_SETTING(clip_cover_layout, &global_settings.clip_cover_layout, NULL);
-#endif
 
 MAKE_MENU(display_menu, ID2P(LANG_DISPLAY),
             NULL, Icon_Display_menu,
             &lcd_settings,
-#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
-            &clip_cover_layout,
-#endif
 #ifdef HAVE_REMOTE_LCD
             &lcd_remote_settings,
 #endif

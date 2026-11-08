@@ -231,18 +231,17 @@ playlist is created on the first like if absent; prepared relative paths and
 Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
-Now Playing offers **Stacked** (default: album name / cover / song title) and
-**Side by side** (cover left, album and song right). Choose under **Settings →
-Settings → General Settings → Display → Now Playing layout**. The choice is
-saved across restarts and switches without interrupting playback. Both layouts
-use the same 44×44 cover, readable scrolling text, a thin bottom progress bar,
-and a small outlined/filled like heart. Pause, seek, like and Middle + Up for
-Add to Playlist retain their existing physical shortcuts.
+Now Playing uses a single **side-by-side** layout: a full **61×61 cover** on
+the left, with scrolling **song title and artist** on the right. The three-pixel
+progress bar spans the bottom and a small like heart sits above it on the right.
+The cover uses every available row above the bar, without an added border.
+The stacked layout and its setting have been removed. Older saved layout keys
+are ignored. Pause, seek, like and Middle + Up for Add to Playlist keep working.
 
 Rockbox Manager automatically prepares covers from embedded/local artwork or
 verified MusicBrainz / Cover Art Archive matches. Select a song to preview its
 cover, then Send to Player to install the draft. Artist folders may contain
-multiple albums: track-specific `.44x44.bmp` files prevent sharing the wrong
+multiple albums: track-specific `.61x61.bmp` files prevent sharing the wrong
 cover. Missing, ambiguous or unreadable artwork uses a record placeholder.
 No tag changes or database rebuild are needed for artwork. See the
 [Manager guide](utils/rockbox-manager/README.md#album-artwork) for defaults,
@@ -393,9 +392,8 @@ through the homelab. All **337 package files** passed SHA-256 read-back verifica
 - Verified all **70 protected settings, database, playlist and personal files**
   match the pre-transfer hashes. No audio or tags changed; no database rebuild.
 
-Choose **Stacked** (default: album / cover / song) or **Side by side** (cover left,
-album and song right) in Display → Now Playing layout. Both keep progress and a
-small like heart. Existing physical shortcuts remain available.
+This initial version offered two 44×44 layouts. It is superseded by the
+side-by-side-only 61×61 cover, title and artist update below.
 
 The updated portable Manager is `C:/RockboxDev/rockbox/build-rockbox-manager/RockboxManager.exe`.
 It includes Artists/Albums browsing, album artist and disc/track metadata, exact

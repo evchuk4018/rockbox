@@ -160,13 +160,11 @@ After building and seeding, the user should check the following with `run.ps1`:
     then re-enter the screen/restart to check persistence. Hold Up for pitch and
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
-11. Check both Now Playing layouts under Display → Now Playing layout. Stacked
-    shows album / 44×44 cover / song; Side by side shows the cover left and album
-    and song right. Both retain progress and the like heart. Long names scroll.
-    Switch during playback and after pausing, then restart to check persistence.
-    Check a track with no artwork and a corrupt BMP after one with artwork: the
-    placeholder must appear rather than retaining the previous cover. Confirm
-    pause, seek, like and Add to Playlist shortcuts still work.
+11. Check the fixed Now Playing layout: 61×61 artwork left, song title and
+    performer right, full-width progress along the bottom and a small like heart.
+    Use a song whose album equals its title: the second row must show the artist.
+    Long text scrolls. Missing/corrupt artwork must show the placeholder after a
+    covered track. Confirm pause, seek, like and Add to Playlist still work.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
     Change Genre shows its target. Let the current song
     finish: it must not restart or briefly
@@ -363,7 +361,7 @@ result; select the second result; repeat while audio is playing or paused.
 
 ## Clip monochrome album artwork
 
-Clip and Clip+ enable the existing album-art pipeline for prepared 44×44 BMPs.
+Clip and Clip+ enable the existing album-art pipeline for prepared 61×61 BMPs.
 The original Clip Windows simulator exercises the same skin. JPEG decoding and
 resizing stay on the PC; embedded JPEG loading is compiled only with HAVE_JPEG.
 Plugin JPEG wrappers do not use core-only embedded-tag readers. `albumart.h`
@@ -371,17 +369,19 @@ includes bitmap dimensions explicitly, and the scaler is omitted from monochrome
 core builds. On negative monochrome LCDs, album-art drawing corrects BMP polarity;
 static skin icons retain their usual polarity.
 
-`clip_cover_layout` is an ordinary persisted choice (`now playing layout`),
-defaulting to Stacked. One `%Cl` slot draws relative to mutually exclusive
-viewports, avoiding a skin reload and its playback stop. The Home suite checks
-skin parsing, viewport bounds, the placeholder and native drawing/polarity.
+The fixed side-by-side skin uses one 61×61 album-art slot and has no layout
+setting. The cover fills rows 0–60; the full-width progress bar fills rows 61–63.
+Title and artist viewports use the right-hand space, with album artist only as
+an artist fallback. The album token is absent so an album matching the song
+cannot duplicate the title. The Home suite checks parsing, bounds, artist-token
+selection, the placeholder and native drawing/polarity.
 
 Rockbox Manager keeps decoding in WPF, with conversion, exact matching, metadata
 grouping and output planning in Core. Scans and `--inspect` read audio through
 read-only streams. Background artwork prepares a draft; normal Send and the
 explicit `--backfill-artwork` command share the verified batch engine. Recovery
 manifests include a source song for every generated cover; the write boundary
-accepts only the fixed 44×44 1-bit format and permitted artwork destinations.
+accepts only the 61×61 1-bit format (plus 44×44 for existing recovery manifests) and permitted artwork destinations.
 Tests use temporary fixtures and injected HTTP responses/storage failures.
 
 When transferring Windows source to the Linux build host, use `git archive` from

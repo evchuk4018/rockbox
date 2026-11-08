@@ -17,7 +17,7 @@ and cards connected separately through a card reader are outside this version.
   Albums with the same title and different artists stay separate. Album tracks
   use disc number, track number, then title. The table also displays these tags.
 - **Artwork:** covers prepare automatically in the background. Select a song for
-  its 44×44 player preview and status. Ready covers join the draft; Send to Player
+  its 61×61 player preview and status. Ready covers join the draft; Send to Player
   writes them. Retry artwork retries failed lookups without changing music tags.
 - **Playlists:** create, rename, duplicate, delete, add songs, remove entries, or
   reorder with Up/Down or drag and drop. Clear filters and sorting before reordering.
@@ -51,11 +51,10 @@ edit tags, update firmware or scores, play audio, or eject the player.
 ## Album artwork
 
 The Clip/Clip+ firmware in this repository supports PC-prepared monochrome BMPs.
-In **Settings → General Settings → Display → Now Playing layout**, choose
-**Stacked** (default: album / cover / song) or **Side by side** (cover left,
-album and song right). Both retain a thin progress bar and like heart. Long
-names scroll, and changing the layout keeps playback running. Existing pause,
-like and Add to Playlist button shortcuts keep working.
+Now Playing has one layout: a borderless **61×61 cover** left, scrolling **song
+title and artist** right, a three-pixel progress bar across the bottom, and a
+small like heart above it on the right. There is no layout selection. Existing
+pause, like and Add to Playlist button shortcuts keep working.
 
 Manager first checks embedded front artwork, track-specific local images, and
 album-specific local images. `cover`, `folder`, or `front` images apply only to
@@ -68,15 +67,18 @@ second limit, and use bounded retries. Missing online matches are cached for 24 
 Sources and provenance are cached in `%LOCALAPPDATA%\RockboxManager\Artwork`.
 Conversion uses the supplied Sansa Cover Studio defaults: centered crop, 100% zoom,
 125% contrast, brightness 0, cutoff 128, edge detail 40%, auto-levels, Floyd–Steinberg,
-no inversion, and a two-pixel inset. Image resampling uses centered area sampling.
+no inversion. The 61×61 output has no inset to maximize artwork size. Image resampling uses centered area sampling.
 There are no conversion controls in this version.
 
-Generated files are `<track-stem>.44x44.bmp` beside each audio file. A folder can
+Generated files are `<track-stem>.61x61.bmp` beside each audio file. A folder can
 therefore hold different albums without sharing a wrong generic cover. If the
 filename exceeds Rockbox's path limit, Manager uses the existing internal
-`.rockbox/albumart/<artist>-<album>.44x44.bmp` lookup when it fits without a naming
+`.rockbox/albumart/<artist>-<album>.61x61.bmp` lookup when it fits without a naming
 collision. Otherwise the report identifies the path limitation. Audio files and
-embedded tags stay untouched. Covers need no database rebuild. Use this repository's
+embedded tags stay untouched. Covers need no database rebuild. Original cached images are regenerated at full
+size; if only an older `.44x44.bmp` remains, Manager upgrades it offline and
+removes its old two-pixel padding. Old cover files are kept, and interrupted
+older cover sends can still recover. Use this repository's
 matching firmware; stock Clip+ firmware does not enable album-art support.
 
 For an unattended backfill, close Manager and run:

@@ -6,26 +6,30 @@ public sealed record RgbaImage(int Width, int Height, byte[] Pixels);
 
 public static class CoverConverter
 {
-    public const int Size = 44, Inset = 2, Inner = Size - 2 * Inset;
+    public const int Size = 61, Inset = 0, Inner = Size;
+    public const string Suffix = ".61x61.bmp", LegacySuffix = ".44x44.bmp";
 
     public static byte[] Placeholder()
     {
         var white = new bool[Size * Size];
         for (int y = 0; y < Size; y++) for (int x = 0; x < Size; x++)
         {
-            var distance = (x - 21.5) * (x - 21.5) + (y - 21.5) * (y - 21.5);
-            white[y * Size + x] = distance is >= 289 and <= 361 or >= 36 and <= 64 or <= 4;
+            var center = (Size - 1) / 2d;
+            var distance = Math.Sqrt((x - center) * (x - center) + (y - center) * (y - center));
+            white[y * Size + x] = distance >= Size * .39 && distance <= Size * .43 ||
+                distance >= Size * .14 && distance <= Size * .18 || distance <= Size * .045;
         }
         return Bitmap(white);
     }
 
     // Sansa Cover Studio defaults. Area sampling supplies the centered crop;
     // all subsequent operations follow the supplied HTML's default engine.
-    public static byte[] Convert(RgbaImage image)
+    public static byte[] Convert(RgbaImage image, int sourceInset = 0)
     {
-        if (image.Width <= 0 || image.Height <= 0 || image.Pixels.LongLength != (long)image.Width * image.Height * 4)
+        if (sourceInset < 0 || image.Width <= sourceInset * 2 || image.Height <= sourceInset * 2 ||
+            image.Pixels.LongLength != (long)image.Width * image.Height * 4)
             throw new ArgumentException("Invalid RGBA image.");
-        var luma = Crop(image);
+        var luma = Crop(image, sourceInset);
         var histogram = new int[256];
         foreach (var value in luma) histogram[(int)value]++;
         int low = 0, high = 255, sum = 0;
@@ -57,9 +61,9 @@ public static class CoverConverter
     }
 
     private static float Clamp(float value) => Math.Clamp(value, 0, 255);
-    private static float[] Crop(RgbaImage image)
+    private static float[] Crop(RgbaImage image, int sourceInset)
     {
-        double side = Math.Min(image.Width, image.Height), step = side / Inner;
+        double side = Math.Min(image.Width, image.Height) - 2 * sourceInset, step = side / Inner;
         double left = (image.Width - side) / 2, top = (image.Height - side) / 2;
         var luma = new float[Inner * Inner];
         for (int y = 0; y < Inner; y++)
@@ -81,25 +85,25 @@ public static class CoverConverter
         return luma;
     }
 
-    public static byte[] Bitmap(bool[] white)
+    public static byte[] Bitmap(bool[] white, int size = Size)
     {
-        if (white.Length != Size * Size) throw new ArgumentException("Wrong bitmap dimensions.");
-        const int stride = (Size + 31) / 32 * 4;
-        var bmp = new byte[62 + stride * Size]; bmp[0] = 66; bmp[1] = 77;
+        if (white.Length != size * size) throw new ArgumentException("Wrong bitmap dimensions.");
+        int stride = (size + 31) / 32 * 4;
+        var bmp = new byte[62 + stride * size]; bmp[0] = 66; bmp[1] = 77;
         void I32(int offset, int value) => BinaryPrimitives.WriteInt32LittleEndian(bmp.AsSpan(offset), value);
-        I32(2, bmp.Length); I32(10, 62); I32(14, 40); I32(18, Size); I32(22, Size);
-        bmp[26] = 1; bmp[28] = 1; I32(34, stride * Size);
+        I32(2, bmp.Length); I32(10, 62); I32(14, 40); I32(18, size); I32(22, size);
+        bmp[26] = 1; bmp[28] = 1; I32(34, stride * size);
         I32(38, 2835); I32(42, 2835); I32(46, 2); I32(50, 2);
         bmp[58] = bmp[59] = bmp[60] = 255;
-        for (int y = 0; y < Size; y++) for (int x = 0; x < Size; x++)
-            if (white[y * Size + x]) bmp[62 + (Size - 1 - y) * stride + x / 8] |= (byte)(1 << (7 - x % 8));
+        for (int y = 0; y < size; y++) for (int x = 0; x < size; x++)
+            if (white[y * size + x]) bmp[62 + (size - 1 - y) * stride + x / 8] |= (byte)(1 << (7 - x % 8));
         return bmp;
     }
 
-    public static bool IsCover(byte[] bytes) => bytes.Length == 414 && bytes[0] == 66 && bytes[1] == 77 &&
+    public static bool IsCover(byte[] bytes, int size = Size) => bytes.Length == 62 + (size + 31) / 32 * 4 * size && bytes[0] == 66 && bytes[1] == 77 &&
         BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(10)) == 62 &&
-        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(18)) == Size &&
-        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(22)) == Size &&
+        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(18)) == size &&
+        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(22)) == size &&
         BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(26)) == 1 &&
         BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(28)) == 1 &&
         BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(30)) == 0;

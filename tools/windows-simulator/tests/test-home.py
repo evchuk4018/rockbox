@@ -105,34 +105,30 @@ int main(int argc, char **argv) {
         import re
         import struct
         skin = (ROOT / "wps/cabbiev2.sansaclip.wps").read_text(encoding="utf-8")
-        viewports = {}
-        for match in re.finditer(r"%V(l)?\(([^)]+)\)", skin):
-            fields = match[2].split(",")
-            label = fields.pop(0) if match[1] else str(match.start())
-            x, y, width, height, font = map(int, fields)
+        viewports = [tuple(map(int, m.split(","))) for m in re.findall(r"%V\(([^)]+)\)", skin)]
+        for x, y, width, height, font in viewports:
             self.assertGreaterEqual(x, 0)
             self.assertGreaterEqual(y, 0)
             self.assertLessEqual(x + width, 128)
             self.assertLessEqual(y + height, 64)
-            viewports[label] = (x, y, width, height)
-        self.assertEqual(viewports["b"], (42, 8, 44, 44))
-        self.assertEqual(viewports["d"], (3, 5, 44, 44))
-        self.assertLessEqual(viewports["a"][1] + viewports["a"][3], viewports["b"][1])
-        self.assertLessEqual(viewports["b"][1] + viewports["b"][3], viewports["c"][1])
-        self.assertIn("%?St(now playing layout)<%Vd(a)%Vd(b)%Vd(c)|%Vd(d)%Vd(e)%Vd(f)>", skin)
-        self.assertEqual(skin.count("%Cl("), 1)
-        self.assertEqual(skin.count("%?C<%Cd|%xd(N)>"), 2)
-        self.assertIn("%pb(0,0,111,3)", skin)
+        self.assertIn((0, 0, 61, 61, 1), viewports)
+        self.assertIn((0, 61, 128, 3, 1), viewports)
+        self.assertIn("%Cl(0,0,61,61)", skin)
+        self.assertEqual(skin.count("%?C<%Cd|%xd(N)>"), 1)
+        self.assertIn("%pb(0,0,128,3)", skin)
         self.assertIn("%?hL<%xd(Hb)|%xd(Ha)>", skin)
-        for token in ("%pL", "%pR", "%pc", "%pt", "%xd(B", "%xd(D", "%xd(E", "%xd(F"):
+        self.assertIn("%?it<%it|%fn>", skin)
+        self.assertIn("%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>", skin)
+        for token in ("%id", "%?St", "%Vd", "%pL", "%pR", "%pc", "%pt", "%xd(B", "%xd(D", "%xd(E", "%xd(F"):
             self.assertNotIn(token, skin)
-        for target in ("sansaclip", "sansaclipplus"):
-            self.assertIn("#define HAVE_ALBUMART", (ROOT / f"firmware/export/config/{target}.h").read_text())
+        for viewport in viewports[1:-1]:
+            self.assertGreaterEqual(viewport[0], 61)
+            self.assertLessEqual(viewport[1] + viewport[3], 61)
         placeholder = (ROOT / "wps/cabbiev2/cover-missing-clip.bmp").read_bytes()
-        self.assertEqual(struct.unpack_from("<iiHH", placeholder, 18), (44, 44, 1, 1))
-        self.assertEqual(len(placeholder), 414)
-        setting = (ROOT / "apps/settings_list.c").read_text()
-        self.assertIn('clip_cover_layout, LANG_CLIP_COVER_LAYOUT, 0', setting)
+        self.assertEqual(struct.unpack_from("<iiHH", placeholder, 18), (61, 61, 1, 1))
+        self.assertEqual(len(placeholder), 550)
+        for filename in ("apps/settings.h", "apps/settings_list.c", "apps/menus/display_menu.c"):
+            self.assertNotIn("clip_cover_layout", (ROOT / filename).read_text())
 
     def test_mono_albumart_polarity_and_missing_handle(self):
         production = function((ROOT / "apps/gui/skin_engine/skin_display.c").read_text(), "void draw_album_art(")
@@ -160,15 +156,15 @@ struct wps_data {struct skin_albumart *albumart;};
 struct screen {int screen_type;void (*bitmap_part)(const void *,int,int,int,int,int,int,int);void (*set_drawmode)(int);void (*fillrect)(int,int,int,int);};
 struct gui_wps {struct wps_data *data;struct screen *display;};
 static struct {bool invert;} global_settings;
-static struct bitmap bitmap={44,44,NULL};
+static struct bitmap bitmap={61,61,NULL};
 static int draws,complements,mode;
 static int bufgetdata(int handle,int size,void **out) {(void)size;*out=&bitmap;return handle==9?sizeof(bitmap):0;}
-static void draw(const void *data,int sx,int sy,int stride,int x,int y,int w,int h) {(void)data;assert(!sx&&!sy&&stride==44&&!x&&!y&&w==44&&h==44);draws++;}
+static void draw(const void *data,int sx,int sy,int stride,int x,int y,int w,int h) {(void)data;assert(!sx&&!sy&&stride==61&&!x&&!y&&w==61&&h==61);draws++;}
 static void setmode(int value) {mode=value;}
-static void fill(int x,int y,int w,int h) {assert(!x&&!y&&w==44&&h==44);if(mode==DRMODE_COMPLEMENT)complements++;}
+static void fill(int x,int y,int w,int h) {assert(!x&&!y&&w==61&&h==61);if(mode==DRMODE_COMPLEMENT)complements++;}
 """ + production + r"""
 int main(void) {
- struct skin_albumart art={0,0,44,44,1,1};struct wps_data data={&art};struct screen display={0,draw,setmode,fill};struct gui_wps wps={&data,&display};
+ struct skin_albumart art={0,0,61,61,1,1};struct wps_data data={&art};struct screen display={0,draw,setmode,fill};struct gui_wps wps={&data,&display};
  draw_album_art(&wps,9,false);assert(draws==1&&complements==1&&mode==DRMODE_SOLID);
  draw_album_art(&wps,-1,false);draw_album_art(&wps,8,false);assert(draws==1&&complements==1);
  global_settings.invert=true;draw_album_art(&wps,9,false);assert(draws==2&&complements==3&&mode==DRMODE_SOLID);

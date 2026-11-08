@@ -59,7 +59,7 @@
             </DataGrid.Columns>
           </DataGrid>
           <Grid Grid.Row="5" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Border Background="Black" Width="88" Height="88" Margin="0,0,14,0"><Image x:Name="CoverPreview" RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Uniform" AutomationProperties.Name="Player cover preview"/></Border>
+            <Border Background="Black" Width="122" Height="122" Margin="0,0,14,0"><Image x:Name="CoverPreview" RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Uniform" AutomationProperties.Name="Player cover preview"/></Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="RowCount" Foreground="{StaticResource Muted}" FontSize="12"/><TextBlock x:Name="CoverStatus" Text="Select a song to preview its cover." TextWrapping="Wrap" Margin="0,6,0,0"/><TextBlock x:Name="ArtworkSummary" Text="Artwork will be prepared automatically." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel>
             <Button x:Name="ArtworkRetry" Grid.Column="2" Content="Retry artwork" Click="ArtworkRetryClick" VerticalAlignment="Center" Margin="12,0,0,0"/>
           </Grid>

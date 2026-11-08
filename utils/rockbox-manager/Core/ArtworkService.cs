@@ -21,7 +21,8 @@ public sealed class ArtworkService
     private readonly Dictionary<string, CoverSource> resolved = [];
     private readonly Dictionary<string, string> releaseHints = [];
     private DateTime nextMusicBrainz;
-    private sealed record CoverSource(string Status, string Source = "", string Message = "", byte[]? Bytes = null, bool Converted = false);
+    private sealed record CoverSource(string Status, string Source = "", string Message = "", byte[]? Bytes = null,
+        bool Converted = false, int SourceInset = 0);
     private sealed record CacheEntry(string Status, string Source, string Message, DateTime Checked, string? Image);
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"];
@@ -82,7 +83,7 @@ public sealed class ArtworkService
                 if (source.Bytes is null) result = new(track.Path, source.Status, source.Source, source.Message);
                 else
                 {
-                    var bitmap = source.Converted ? source.Bytes : CoverConverter.Convert(decode(source.Bytes));
+                    var bitmap = source.Converted ? source.Bytes : CoverConverter.Convert(decode(source.Bytes), source.SourceInset);
                     if (target is null) result = new(track.Path, "PathTooLong", source.Source, "No unambiguous artwork path fits Rockbox's 259-byte limit.");
                     else
                     {
@@ -119,17 +120,17 @@ public sealed class ArtworkService
     private static string FixPart(string value) => new(value.Select(c => c == '"' ? '\'' : "*/:<>?\\|".Contains(c) ? '_' : c).ToArray());
     public static (Storage, string)? Destination(Track track, IReadOnlyList<Track> tracks)
     {
-        var sidecar = Path.ChangeExtension(track.Path.RelativePath, null) + ".44x44.bmp";
+        var sidecar = Path.ChangeExtension(track.Path.RelativePath, null) + ".61x61.bmp";
         try
         {
             PlaylistCodec.ValidatePath((track.Path with { RelativePath = sidecar }).RockboxPath);
             if (!tracks.Any(t => t.Path.Storage == track.Path.Storage && t.AlbumKey != track.AlbumKey &&
-                (Path.ChangeExtension(t.Path.RelativePath, null) + ".44x44.bmp").Equals(sidecar, StringComparison.OrdinalIgnoreCase)))
+                (Path.ChangeExtension(t.Path.RelativePath, null) + ".61x61.bmp").Equals(sidecar, StringComparison.OrdinalIgnoreCase)))
                 return (track.Path.Storage, sidecar);
         }
         catch (InvalidOperationException) { }
         if (string.IsNullOrWhiteSpace(track.GroupArtist) || string.IsNullOrWhiteSpace(track.Album)) return null;
-        var name = FixPart(track.GroupArtist + "-" + track.Album) + ".44x44.bmp";
+        var name = FixPart(track.GroupArtist + "-" + track.Album) + ".61x61.bmp";
         var central = ".rockbox/albumart/" + name;
         if (tracks.Any(t => t.AlbumKey != track.AlbumKey &&
             FixPart(t.GroupArtist + "-" + t.Album).Equals(name[..^10], StringComparison.OrdinalIgnoreCase))) return null;
@@ -141,6 +142,19 @@ public sealed class ArtworkService
     {
         var audioPath = device.FilePath(track.Path.Storage, track.Path.RelativePath);
         string release = track.ArtworkReleaseId, group = track.ArtworkReleaseGroupId;
+        CoverSource? PlayerCover()
+        {
+            if (installed is not null) return new("Ready", "Player cover", Bytes: installed, Converted: true);
+            string[] legacyPaths = [device.FilePath(track.Path.Storage, Path.ChangeExtension(track.Path.RelativePath, null) + CoverConverter.LegacySuffix),
+                device.FilePath(Storage.Internal, ".rockbox/albumart/" + FixPart(track.GroupArtist + "-" + track.Album) + CoverConverter.LegacySuffix)];
+            foreach (var path in legacyPaths)
+            {
+                if (!File.Exists(path)) continue;
+                var bytes = ReadImage(path);
+                if (CoverConverter.IsCover(bytes, 44)) return new("Ready", "Legacy player cover", Bytes: bytes, SourceInset: 2);
+            }
+            return null;
+        }
         if (track.HasEmbeddedArtwork != false) try
         {
             using var audio = TagLib.File.Create(new PlayerLibrary.ReadOnlyAudio(audioPath));
@@ -168,7 +182,7 @@ public sealed class ArtworkService
                 catch (Exception ex) when (ex is IOException or ArgumentException or NotSupportedException or FormatException) { }
             }
         if (resolved.TryGetValue(track.AlbumKey, out var existing))
-            return existing.Bytes is null && installed is not null ? new("Ready", "Player cover", Bytes: installed, Converted: true) : existing;
+            return existing.Bytes is null ? PlayerCover() ?? existing : existing;
         var key = FileSnapshot.Digest(Encoding.UTF8.GetBytes(track.AlbumKey));
         var metadataPath = Path.Combine(cacheRoot, key + ".json");
         try
@@ -182,11 +196,11 @@ public sealed class ArtworkService
                     return resolved[track.AlbumKey] = new("Ready", cached.Source, Bytes: bytes);
                 }
                 if (installed is null && cached is not null && DateTime.UtcNow - cached.Checked < TimeSpan.FromHours(24) && cached.Status == "Missing")
-                    return resolved[track.AlbumKey] = new(cached.Status, cached.Source, cached.Message);
+                    return PlayerCover() ?? (resolved[track.AlbumKey] = new(cached.Status, cached.Source, cached.Message));
             }
         }
         catch (Exception ex) when (ex is IOException or JsonException or ArgumentException or NotSupportedException or FormatException) { }
-        if (installed is not null) return new("Ready", "Player cover", Bytes: installed, Converted: true);
+        if (PlayerCover() is { } playerCover) return playerCover;
         CoverSource found;
         try
         {

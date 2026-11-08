@@ -80,6 +80,8 @@ public sealed class PlayerFiles : IPlayerFiles
     }
     public void Replace(string path, byte[] content)
     {
+        if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0)
+            throw new UnauthorizedAccessException($"The player file is read-only: {path}");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".rbmanager-" + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -186,9 +188,12 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
         var isPins = change.Storage == Storage.Internal && relative == EditSession.PinsPath;
         var isPlaylist = relative.StartsWith("Playlists/", StringComparison.OrdinalIgnoreCase) &&
             (relative.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase));
-        var isArtwork = change.ArtworkTrack is { } source && change.Content is { } bitmap && CoverConverter.IsCover(bitmap) &&
-            relative.EndsWith(".44x44.bmp", StringComparison.OrdinalIgnoreCase) &&
-            (change.Storage == source.Storage && relative.Equals(Path.ChangeExtension(source.RelativePath, null) + ".44x44.bmp", StringComparison.OrdinalIgnoreCase) &&
+        var suffix = relative.EndsWith(CoverConverter.LegacySuffix, StringComparison.OrdinalIgnoreCase)
+            ? CoverConverter.LegacySuffix : CoverConverter.Suffix;
+        var isArtwork = change.ArtworkTrack is { } source && change.Content is { } bitmap &&
+            CoverConverter.IsCover(bitmap, suffix == CoverConverter.LegacySuffix ? 44 : CoverConverter.Size) &&
+            relative.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            (change.Storage == source.Storage && relative.Equals(Path.ChangeExtension(source.RelativePath, null) + suffix, StringComparison.OrdinalIgnoreCase) &&
                 !relative.StartsWith(".rockbox/", StringComparison.OrdinalIgnoreCase) ||
              change.Storage == Storage.Internal && relative.StartsWith(".rockbox/albumart/", StringComparison.Ordinal) && relative.Split('/').Length == 3);
         if ((!isPins && !isPlaylist && !isArtwork) || relative.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')))
