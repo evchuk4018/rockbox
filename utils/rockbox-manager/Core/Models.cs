@@ -36,6 +36,7 @@ public sealed record Track(SongPath Path, string Title, string Artist, string Al
 {
     public string GroupArtist => string.IsNullOrWhiteSpace(AlbumArtist) ? Artist : AlbumArtist;
     public string AlbumKey => LibraryViews.Identity(GroupArtist, Album);
+    internal string YouTubeVideoId { get; init; } = "";
     internal bool? HasEmbeddedArtwork { get; init; }
     internal string ArtworkReleaseId { get; init; } = "";
     internal string ArtworkReleaseGroupId { get; init; } = "";

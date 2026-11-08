@@ -256,9 +256,9 @@ public partial class MainWindow : Window
         CoverPreview.Source = ArtworkDecoder.Preview(CoverConverter.Placeholder());
         if (!artwork.TryGetValue(row.Track.Path, out var cover)) { CoverStatus.Text = preparingArtwork ? "Preparing this song's artwork…" : "No prepared cover."; return; }
         if (cover.Bitmap is not null) CoverPreview.Source = ArtworkDecoder.Preview(cover.Bitmap);
-        CoverStatus.Text = $"{cover.Status} · {row.Track.Album}" + (cover.Message.Length > 0 ? " · " + cover.Message : "");
+        CoverStatus.Text = $"{cover.Status} · {cover.SourceKind} · {row.Track.Album}" + (cover.Message.Length > 0 ? " · " + cover.Message : "");
     }
-    private async Task PrepareArtwork()
+    private async Task PrepareArtwork(bool retry = false)
     {
         if (session is null || connected is null || session.PendingBatch is not null) return;
         var editing = session;
@@ -273,7 +273,7 @@ public partial class MainWindow : Window
             {
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
                 var service = new ArtworkService(Path.Combine(App.DataRoot, "Artwork"), ArtworkDecoder.Decode, http);
-                return await service.Prepare(editing.Device, sourceTracks, progress, operation.Token);
+                return await service.Prepare(editing.Device, sourceTracks, progress, operation.Token, retry);
             }, operation.Token);
             if (session != editing || operation.IsCancellationRequested || editing.PendingBatch is not null) return;
             artwork = prepared.ToDictionary(a => a.Track);
@@ -292,7 +292,7 @@ public partial class MainWindow : Window
             { artworkCancellation = null; preparingArtwork = false; ArtworkRetry.IsEnabled = !busy; UpdateCoverPreview(); UpdateChrome(); }
         }
     }
-    private async void ArtworkRetryClick(object sender, RoutedEventArgs e) { if (!busy && !preparingArtwork) await PrepareArtwork(); }
+    private async void ArtworkRetryClick(object sender, RoutedEventArgs e) { if (!busy && !preparingArtwork) await PrepareArtwork(retry: true); }
     private void UpdateRowCount()
     {
         if (rows is null) return;

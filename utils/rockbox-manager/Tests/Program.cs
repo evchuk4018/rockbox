@@ -169,6 +169,8 @@ Test("Unreadable metadata falls back to filename without changing audio", () =>
     Check(tracks.Count == 3 && tracks.All(t => t.Title.Length > 0)); Check(before.SequenceEqual(f.AudioHashes()));
 });
 ArtworkTests.Run(Test, condition => Check(condition));
+ThumbnailCropTests.Run(Test, condition => Check(condition));
+ArtworkLookupTests.Run(Test, condition => Check(condition));
 Console.WriteLine($"{tests - failures}/{tests} tests passed");
 return failures == 0 ? 0 : 1;
 

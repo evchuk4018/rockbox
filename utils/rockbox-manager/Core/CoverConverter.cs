@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 namespace RockboxManager.Core;
 
 public sealed record RgbaImage(int Width, int Height, byte[] Pixels);
+public sealed record CropRectangle(int X, int Y, int Size);
 
 public static class CoverConverter
 {
@@ -24,12 +25,15 @@ public static class CoverConverter
 
     // Sansa Cover Studio defaults. Area sampling supplies the centered crop;
     // all subsequent operations follow the supplied HTML's default engine.
-    public static byte[] Convert(RgbaImage image, int sourceInset = 0)
+    public static byte[] Convert(RgbaImage image, int sourceInset = 0, bool thumbnail = false, CropRectangle? crop = null)
     {
         if (sourceInset < 0 || image.Width <= sourceInset * 2 || image.Height <= sourceInset * 2 ||
             image.Pixels.LongLength != (long)image.Width * image.Height * 4)
             throw new ArgumentException("Invalid RGBA image.");
-        var luma = Crop(image, sourceInset);
+        if (crop is not null && (crop.X < 0 || crop.Y < 0 || crop.Size <= 0 ||
+            (long)crop.X + crop.Size > image.Width || (long)crop.Y + crop.Size > image.Height))
+            throw new ArgumentException("Invalid crop rectangle.");
+        var luma = Crop(image, sourceInset, thumbnail, crop);
         var histogram = new int[256];
         foreach (var value in luma) histogram[(int)value]++;
         int low = 0, high = 255, sum = 0;
@@ -61,10 +65,27 @@ public static class CoverConverter
     }
 
     private static float Clamp(float value) => Math.Clamp(value, 0, 255);
-    private static float[] Crop(RgbaImage image, int sourceInset)
+    private static float[] Crop(RgbaImage image, int sourceInset, bool thumbnail, CropRectangle? crop)
     {
-        double side = Math.Min(image.Width, image.Height) - 2 * sourceInset, step = side / Inner;
-        double left = (image.Width - side) / 2, top = (image.Height - side) / 2;
+        double left, top, side;
+        if (crop is not null) { left = crop.X; top = crop.Y; side = crop.Size; }
+        else if (thumbnail && sourceInset == 0 && image.Width != image.Height)
+        {
+            int x = 0, y = 0, width = image.Width, height = image.Height;
+            int leftStrip = Strip(image, true, false), rightStrip = Strip(image, true, true);
+            if (leftStrip > 0 && rightStrip > 0 && Math.Abs(leftStrip - rightStrip) <= 2)
+            { x = leftStrip; width -= leftStrip + rightStrip; }
+            int topStrip = Strip(image, false, false), bottomStrip = Strip(image, false, true);
+            if (topStrip > 0 && bottomStrip > 0 && Math.Abs(topStrip - bottomStrip) <= 2)
+            { y = topStrip; height -= topStrip + bottomStrip; }
+            side = Math.Min(width, height); left = x + (width - side) / 2d; top = y + (height - side) / 2d;
+        }
+        else
+        {
+            side = Math.Min(image.Width, image.Height) - 2 * sourceInset;
+            left = (image.Width - side) / 2; top = (image.Height - side) / 2;
+        }
+        double step = side / Inner;
         var luma = new float[Inner * Inner];
         for (int y = 0; y < Inner; y++)
             for (int x = 0; x < Inner; x++)
@@ -83,6 +104,26 @@ public static class CoverConverter
                 luma[y * Inner + x] = (float)Math.Clamp(Math.Floor(.2126 * r + .7152 * g + .0722 * b + .5), 0, 255);
             }
         return luma;
+    }
+
+    private static int Strip(RgbaImage image, bool vertical, bool reverse)
+    {
+        int dimension = vertical ? image.Width : image.Height;
+        int length = vertical ? image.Height : image.Width;
+        int count = 0;
+        for (int i = 0; i <= dimension / 4; i++)
+        {
+            int edge = reverse ? dimension - 1 - i : i, dark = 0;
+            for (int j = 0; j < length; j++)
+            {
+                int p = (vertical ? j * image.Width + edge : edge * image.Width + j) * 4;
+                if (image.Pixels[p] <= 16 && image.Pixels[p + 1] <= 16 && image.Pixels[p + 2] <= 16) dark++;
+            }
+            if (dark < length * .99) break;
+            if (i == dimension / 4) return 0;
+            count++;
+        }
+        return count;
     }
 
     public static byte[] Bitmap(bool[] white, int size = Size)

@@ -61,22 +61,37 @@ pause, like and Add to Playlist button shortcuts keep working.
 Manager first checks embedded front artwork, track-specific local images, and
 album-specific local images. `cover`, `folder`, or `front` images apply only to
 folders containing one album. It then uses its PC cache, an existing generated
-player cover, or exact MusicBrainz / Cover Art Archive matches. Different versions
-and ambiguous artist/album matches keep the built-in placeholder. Network failures
-remain retryable. Requests identify the app, respect MusicBrainz's one-request-per-
-second limit, and use bounded retries. Missing online matches are cached for 24 hours.
+player cover, or verified MusicBrainz / Cover Art Archive matches. Album searches
+also check release titles and recording identity, preserving version qualifiers
+and checking duration before accepting an unambiguous release.
+
+If a verified album cover is unavailable, Manager reads the song's original
+YouTube URL from its ID3 WOAS tag and tries that exact video's largest usable
+thumbnail. Thumbnails are cached by video rather than album, so unrelated songs
+under a shared album label keep their own images. The selected-song status and
+reports identify the source. Missing album matches do not block this fallback.
+Retry artwork bypasses cached misses and retries album lookups for thumbnail-backed
+songs, allowing genuine release artwork to replace a fallback. Requests identify
+the app, respect MusicBrainz's one-request-per-second limit, and use bounded retries.
 
 Sources and provenance are cached in `%LOCALAPPDATA%\RockboxManager\Artwork`.
 Conversion uses the supplied Sansa Cover Studio defaults: centered crop, 100% zoom,
 125% contrast, brightness 0, cutoff 128, edge detail 40%, auto-levels, Floyd–Steinberg,
 no inversion. The 61×61 output has no inset to maximize artwork size. Image resampling uses centered area sampling.
-There are no conversion controls in this version.
+Thumbnails have clear paired black bars removed before square cropping. Original
+album artwork retains its existing crop. Review metadata can hold an explicit
+square crop (`X`, `Y`, `Size` in original-image pixels); it is tied to the original
+image hash and bypasses automatic cropping. There are no conversion controls in
+the main window.
 
 Generated files are `<track-stem>.61x61.bmp` beside each audio file. A folder can
 therefore hold different albums without sharing a wrong generic cover. If the
 filename exceeds Rockbox's path limit, Manager uses the existing internal
 `.rockbox/albumart/<artist>-<album>.61x61.bmp` lookup when it fits without a naming
-collision. Otherwise the report identifies the path limitation. Audio files and
+collision. As a final fallback, a folder containing exactly one song can use
+`cover.61x61.bmp`; Manager checks that condition again immediately before sending.
+If a second song appears, that send is refused. Otherwise the report identifies
+the path limitation. Audio files and
 embedded tags stay untouched. Covers need no database rebuild. Original cached images are regenerated at full
 size; if only an older `.44x44.bmp` remains, Manager upgrades it offline and
 removes its old two-pixel padding. Old cover files are kept, and interrupted
@@ -96,6 +111,21 @@ compatible verified results from `scripts/review-music-library.py`; the current
 album artist, artist, album, title and duration must agree before reuse. It does
 not retag or import audio. Fixtures also support this command. `--inspect` stays
 read-only and never prepares or sends artwork.
+
+To prepare the PC cache and review BMPs from a local staging library while the
+player is disconnected:
+
+```powershell
+Start-Process C:\RockboxDev\rockbox\build-rockbox-manager\RockboxManager.exe -WindowStyle Hidden -Wait -ArgumentList '--prepare-artwork C:\RockboxDev\logs\artwork-prepared.json --source-library C:\RockboxDev\RockboxCardReady'
+```
+
+This writes only the PC cache, requested report/progress file and a sibling
+`.previews` directory. It never runs the send engine or writes music-side artwork.
+Add `--source-storage sd` when preparing an SD-card staging tree so artwork paths
+are checked with Rockbox's longer SD-volume prefix.
+Both preparation commands accept `--retry-artwork` to bypass cached misses and
+`--release-review <path>` for compatible verified release hints. After visual
+review, connect the Clip+ and use the normal backfill or Send to Player action.
 
 ## Interrupted sends and recovery
 

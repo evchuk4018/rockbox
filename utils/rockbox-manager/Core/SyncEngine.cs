@@ -193,7 +193,11 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
         var isArtwork = change.ArtworkTrack is { } source && change.Content is { } bitmap &&
             CoverConverter.IsCover(bitmap, suffix == CoverConverter.LegacySuffix ? 44 : CoverConverter.Size) &&
             relative.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-            (change.Storage == source.Storage && relative.Equals(Path.ChangeExtension(source.RelativePath, null) + suffix, StringComparison.OrdinalIgnoreCase) &&
+            (change.Storage == source.Storage &&
+                (relative.Equals(Path.ChangeExtension(source.RelativePath, null) + suffix, StringComparison.OrdinalIgnoreCase) ||
+                 suffix == CoverConverter.Suffix && relative.Equals(
+                    (source.RelativePath.Contains('/') ? source.RelativePath[..(source.RelativePath.LastIndexOf('/') + 1)] : "") + "cover" + CoverConverter.Suffix,
+                    StringComparison.OrdinalIgnoreCase) && IsSingleSongFolder(device, source)) &&
                 !relative.StartsWith(".rockbox/", StringComparison.OrdinalIgnoreCase) ||
              change.Storage == Storage.Internal && relative.StartsWith(".rockbox/albumart/", StringComparison.Ordinal) && relative.Split('/').Length == 3);
         if ((!isPins && !isPlaylist && !isArtwork) || relative.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')))
@@ -202,7 +206,7 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
         {
             var audio = change.ArtworkTrack!;
             PlaylistCodec.ValidatePath(audio.RockboxPath);
-            if (!PlayerLibrary.IsAudio(audio.RelativePath) || audio.RelativePath.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')) ||
+            if (!PlayerLibrary.IsAudio(audio.RelativePath) || audio.RelativePath.Replace('\\', '/').Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')) ||
                 !File.Exists(device.FilePath(audio.Storage, audio.RelativePath))) throw new IOException("The source song is unavailable.");
         }
         PlaylistCodec.ValidatePath("/" + relative);
@@ -216,6 +220,22 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
         if (File.Exists(full) && (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidOperationException("Playlist files cannot be symbolic links.");
         return full;
+    }
+
+    public static bool IsSingleSongFolder(PlayerDevice device, SongPath source)
+    {
+        try
+        {
+            if (!PlayerLibrary.IsAudio(source.RelativePath) || source.RelativePath.Replace('\\', '/').Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')))
+                return false;
+            var path = device.FilePath(source.Storage, source.RelativePath);
+            if (!File.Exists(path)) return false;
+            var songs = Directory.EnumerateFiles(Path.GetDirectoryName(path)!)
+                .Where(PlayerLibrary.IsAudio).Take(2).ToArray();
+            return songs.Length == 1 && songs[0].Equals(path, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException)
+        { return false; }
     }
 
     private static string? Hash(byte[]? bytes) => bytes is null ? null : FileSnapshot.Digest(bytes);

@@ -248,10 +248,12 @@ The stacked layout and its setting have been removed. Older saved layout keys
 are ignored. Pause, seek, like and Middle + Up for Add to Playlist keep working.
 
 Rockbox Manager automatically prepares covers from embedded/local artwork or
-verified MusicBrainz / Cover Art Archive matches. Select a song to preview its
+verified MusicBrainz / Cover Art Archive matches, then uses the song's exact
+source YouTube thumbnail when release artwork is unavailable. Thumbnail crops
+are centered squares. Select a song to preview its
 cover, then Send to Player to install the draft. Artist folders may contain
 multiple albums: track-specific `.61x61.bmp` files prevent sharing the wrong
-cover. Missing, ambiguous or unreadable artwork uses a record placeholder.
+cover. Songs without usable release artwork or a source thumbnail use a record placeholder.
 No tag changes or database rebuild are needed for artwork. See the
 [Manager guide](utils/rockbox-manager/README.md#album-artwork) for defaults,
 backfill reports, caching and recovery.
@@ -468,6 +470,8 @@ the Clip+ to load the corrected layout.
 Firmware **cfc4853983-261108** is built and packaged for **Clip+**. It is ready at
 `build-sansaclipplus/rockbox.zip`; no player was connected during this update.
 
+The next deployment also includes the centered artwork repair described below.
+
 - Albums and its album-name search show groups with at least two indexed songs.
   Artist pages and direct access to single-song releases retain their behavior.
 - Song search uses Home listening scores, highest first, with deterministic ties.
@@ -492,3 +496,34 @@ Source, build/test logs, the package and `verification.json` are preserved under
 `.rockbox` folder. Safely eject both volumes, disconnect USB, and restart.
 Visual, button and audio acceptance remain for the user. This firmware update
 does not require a music database rebuild.
+
+## Centered artwork repair prepared November 8, 2026
+
+All **785 existing player songs** now have prepared covers: **553 album covers**
+and **232 exact-source YouTube thumbnails**. This fills all **279 prior gaps**
+with 47 newly found album covers and 232 thumbnails. The previous 506 cover hashes
+are unchanged. Thumbnail crops are centered squares, as requested, with no manual
+offsets. The player remains disconnected; this update is prepared for later.
+
+Manager now reads original YouTube source tags, checks additional release and
+recording matches, caches thumbnails independently per video, and retries misses
+or upgrades fallbacks through Retry artwork. It refuses conflicting shared covers
+and safely handles the one overlong artwork filename. PC-only preparation writes
+the cache and review previews without sending or changing music.
+
+The combined next-deployment bundle is
+`C:/RockboxDev/logs/artwork-fallback-20261108/next-deployment.zip`. It includes all
+341 pending **cfc4853983-261108** firmware files, the **279 new covers**, and the
+updated portable Windows Manager. `deployment.json` maps and hashes every payload
+file; `INSTALL.md` explains installing firmware and artwork in the same deployment.
+The seven additional staging tracks and separate pending album import are excluded.
+
+Validation: **50/50 Manager tests on Windows and Linux**, portable Windows publish,
+all 785 prepared covers reproduced identically, and all **792 staging audio files**
+(5,126,560,122 bytes) retained their SHA-256 hashes, sizes and modification times.
+A real three-song isolated send verified every cover, including the overlong-name
+fallback; repeating it made **zero writes**. Source JPEGs and centered 61x61 BMPs
+passed decoding/format checks. Reports, contact sheets, deployment manifest and
+ZIP verification are under `C:/RockboxDev/logs/artwork-fallback-20261108`.
+
+See [handoff.md](handoff.md) for the current state and remaining USB deployment.

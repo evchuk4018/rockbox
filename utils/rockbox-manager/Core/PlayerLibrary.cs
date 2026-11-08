@@ -27,7 +27,7 @@ public static class PlayerLibrary
                 string artist = "", album = "", genre = "", albumArtist = "";
                 uint disc = 0, number = 0;
                 bool? hasArtwork = null;
-                string release = "", releaseGroup = "";
+                string release = "", releaseGroup = "", videoId = "";
                 var duration = TimeSpan.Zero;
                 try
                 {
@@ -40,6 +40,8 @@ public static class PlayerLibrary
                     hasArtwork = tags.Tag.Pictures.Length > 0;
                     release = tags.Tag.MusicBrainzReleaseId ?? "";
                     releaseGroup = tags.Tag.MusicBrainzReleaseGroupId ?? "";
+                    if (tags.GetTag(TagLib.TagTypes.Id3v2) is TagLib.Id3v2.Tag id3)
+                        videoId = YouTubeId(TagLib.Id3v2.UrlLinkFrame.Get(id3, "WOAS", false)?.Text.FirstOrDefault() ?? "") ?? "";
                     genre = string.Join(", ", tags.Tag.Genres);
                     duration = tags.Properties.Duration;
                 }
@@ -48,13 +50,26 @@ public static class PlayerLibrary
                 { /* A failed tag read must not hide the audio file. */ }
                 tracks.Add(new(new(volume.Storage, relative), title, artist, album, genre, duration,
                     AlbumArtist: albumArtist, DiscNumber: disc, TrackNumber: number)
-                { HasEmbeddedArtwork = hasArtwork, ArtworkReleaseId = release, ArtworkReleaseGroupId = releaseGroup });
+                { YouTubeVideoId = videoId, HasEmbeddedArtwork = hasArtwork, ArtworkReleaseId = release, ArtworkReleaseGroupId = releaseGroup });
                 if (tracks.Count % 25 == 0) progress?.Report($"Reading music… {tracks.Count:N0} songs");
             }
         }
         return tracks.OrderBy(t => t.Artist, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    public static string? YouTubeId(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http")) return null;
+        string id = "";
+        if (uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)) id = uri.AbsolutePath.Trim('/');
+        else if (uri.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("www.youtube.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("m.youtube.com", StringComparison.OrdinalIgnoreCase))
+        {
+            if (uri.AbsolutePath == "/watch") id = uri.Query.TrimStart('?').Split('&').Select(p => p.Split('=', 2)).Where(p => p.Length == 2 && p[0] == "v").Select(p => p[1]).FirstOrDefault() ?? "";
+            else if (uri.AbsolutePath.StartsWith("/shorts/") || uri.AbsolutePath.StartsWith("/embed/")) id = uri.AbsolutePath.Split('/').Last();
+        }
+        return System.Text.RegularExpressions.Regex.IsMatch(id, "^[A-Za-z0-9_-]{11}$") ? id : null;
     }
 
     internal sealed class ReadOnlyAudio(string path) : TagLib.File.IFileAbstraction
