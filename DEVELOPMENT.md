@@ -383,3 +383,16 @@ explicit `--backfill-artwork` command share the verified batch engine. Recovery
 manifests include a source song for every generated cover; the write boundary
 accepts only the fixed 44×44 1-bit format and permitted artwork destinations.
 Tests use temporary fixtures and injected HTTP responses/storage failures.
+
+When transferring Windows source to the Linux build host, use `git archive` from
+the committed revision. Raw working-tree archives can preserve CRLF in plugin
+category lists and create invalid archive names. `build-clipplus.sh` now rejects
+control characters, traversal and duplicate paths in the finished package before
+it can be installed. Its existing bundled search-font validation remains enabled.
+Visual layout, physical buttons and audio acceptance are left to the user.
+
+Artwork preparation reuses the scan's embedded-picture/release-ID hints, avoiding
+a second tag read for each file without embedded art. Unsupported tag reads keep
+an unknown hint and can retry normally. Both the GUI and unattended command report
+progress; HTTP 429 and temporary 500/502/503/504 responses use bounded retries.
+The final embedded/local fixture pass verifies installed covers produce no writes.

@@ -93,7 +93,7 @@ static class ArtworkTests
         test("Artwork cancellation stops requests and HTTP errors remain retryable", () =>
         {
             using var fixture = new Fixture(); using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
-            using var http = new HttpClient(new FakeHttp(_ => new(HttpStatusCode.BadGateway)));
+            using var http = new HttpClient(new FakeHttp(_ => throw new HttpRequestException("Injected temporary connection failure")));
             var service = new ArtworkService(Path.Combine(fixture.Root, "Cache"), _ => Solid(0), http);
             bool cancelled = false;
             try { service.Prepare(fixture.Device, [Song()], cancellation: cancellation.Token).GetAwaiter().GetResult(); }
@@ -148,14 +148,16 @@ static class ArtworkTests
             var report = service.Prepare(fixture.Device, [Song()]).GetAwaiter().GetResult();
             check(report[0].Status == "Installed" && report[0].Bitmap!.SequenceEqual(bmp) && handler.Calls == 0);
         });
-        test("Rate-limited requests retry and retain a successful exact match", () =>
+        test("Rate-limited and temporary server failures retry and retain a successful exact match", () =>
         {
+          foreach (var status in new[] { HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError })
+          {
             using var fixture = new Fixture(); int calls = 0; var id = Guid.NewGuid().ToString();
             using var http = new HttpClient(new FakeHttp(request =>
             {
                 if (++calls == 1)
                 {
-                    var limited = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+                    var limited = new HttpResponseMessage(status);
                     limited.Headers.RetryAfter = new(TimeSpan.Zero); return limited;
                 }
                 return request.RequestUri!.Host == "musicbrainz.org"
@@ -164,6 +166,7 @@ static class ArtworkTests
             }));
             var service = new ArtworkService(Path.Combine(fixture.Root, "Cache"), _ => Solid(255), http);
             check(service.Prepare(fixture.Device, [Song()]).GetAwaiter().GetResult()[0].Status == "Ready" && calls == 3);
+          }
         });
         test("Verified release hints require matching present tags and duration", () =>
         {

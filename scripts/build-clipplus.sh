@@ -18,6 +18,19 @@ make -j"$jobs" zip
 grep -qx 'Target: sansaclipplus' rockbox-info.txt
 test -s rockbox.sansa
 test -s rockbox.zip
+
+# Windows filesystem transfers must reject malformed paths before any writes.
+python3 - "$PWD/rockbox.zip" <<'PY'
+import sys, zipfile
+from pathlib import PurePosixPath
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    names = archive.namelist()
+    assert len(names) == len({name.lower() for name in names}), "Duplicate archive paths"
+    for name in names:
+        assert name.startswith(".rockbox/") and ".." not in PurePosixPath(name).parts, repr(name)
+        assert "\\" not in name and not any(ord(c) < 32 for c in name), repr(name)
+    assert "Target: sansaclipplus\n" in archive.read(".rockbox/rockbox-info.txt").decode()
+PY
 python3 - "$PWD/rockbox.zip" <<'PY'
 import struct, sys, zipfile
 with zipfile.ZipFile(sys.argv[1]) as package:

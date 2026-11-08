@@ -36,6 +36,9 @@ public sealed record Track(SongPath Path, string Title, string Artist, string Al
 {
     public string GroupArtist => string.IsNullOrWhiteSpace(AlbumArtist) ? Artist : AlbumArtist;
     public string AlbumKey => LibraryViews.Identity(GroupArtist, Album);
+    internal bool? HasEmbeddedArtwork { get; init; }
+    internal string ArtworkReleaseId { get; init; } = "";
+    internal string ArtworkReleaseGroupId { get; init; } = "";
     public string DurationLabel => Duration == TimeSpan.Zero ? "—" :
         Duration.TotalHours >= 1 ? Duration.ToString(@"h\:mm\:ss") : Duration.ToString(@"m\:ss");
     public string StorageLabel => Path.Storage == Storage.Sd ? "SD card" :

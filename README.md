@@ -377,3 +377,48 @@ Unresolved matches keep their existing tags and remain visible in `review.json`.
 Full originals and `applied.json` provide the restore set; keep the audit outside
 Git. Update the player's database after retagging. The homelab music library is
 outside this cleanup's write scope.
+
+## Artwork and Manager update installed November 8, 2026
+
+Installed Clip+ firmware **5f4150ecf6-261108**, built from the committed source
+through the homelab. All **337 package files** passed SHA-256 read-back verification.
+
+- Accounted for all **785 current player songs** using Sansa Cover Studio defaults.
+- Installed and verified **506 track-specific monochrome covers**.
+- Left **277 unavailable/ambiguous matches** on the built-in placeholder.
+- Two songs still had temporary artwork-service failures after bounded retries;
+  Manager's Retry artwork action can try them later. Their exact paths and errors
+  are recorded in the local report.
+- Verified all **785 audio files**, totaling **5,100,388,034 bytes**, are unchanged.
+- Verified all **70 protected settings, database, playlist and personal files**
+  match the pre-transfer hashes. No audio or tags changed; no database rebuild.
+
+Choose **Stacked** (default: album / cover / song) or **Side by side** (cover left,
+album and song right) in Display → Now Playing layout. Both keep progress and a
+small like heart. Existing physical shortcuts remain available.
+
+The updated portable Manager is `C:/RockboxDev/rockbox/build-rockbox-manager/RockboxManager.exe`.
+It includes Artists/Albums browsing, album artist and disc/track metadata, exact
+genre filtering, cover previews, automatic artwork preparation, verified sends,
+caching and retry/recovery. Scanned artwork hints avoid rereading tags for files
+without embedded pictures. Temporary HTTP 500/502/503/504 and rate-limit responses
+use bounded retries.
+
+Reports and backups: `C:/RockboxDev/logs/album-art-20261108`.
+`verification.json` records final totals; `backfill-final.json` accounts for every
+song and source; `audio-verification.json` proves unchanged audio;
+`firmware-transfer.json` records installed build hashes. Original firmware/settings
+are in `device-before/.rockbox`; local artwork operation manifests preserve the
+new-file mappings. The final package is `rockbox.zip` in this directory and in
+`rockbox/build-sansaclipplus`. The earlier invalid archive is explicitly named
+`rockbox-initial-invalid.zip` and must not be installed.
+
+Validation: 33 Manager regressions; eight Home and two library checks on Windows
+and Linux; three metadata checks; simulator and ARM builds; portable publish;
+embedded/local artwork fixtures and an unchanged second fixture send. Package
+validation rejects malformed paths before transfer and checks the bundled search
+font. Visual, button and audio acceptance are left to the user as requested.
+
+Safely eject **both player volumes**, disconnect USB, restart, and check both
+layouts, progress, liking, long titles and a missing-cover placeholder. The
+separate pending album import remains outside this artwork update.

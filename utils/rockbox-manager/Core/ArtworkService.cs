@@ -140,8 +140,8 @@ public sealed class ArtworkService
     private async Task<CoverSource> Resolve(PlayerDevice device, Track track, bool singleAlbumFolder, byte[]? installed, CancellationToken cancellation)
     {
         var audioPath = device.FilePath(track.Path.Storage, track.Path.RelativePath);
-        string release = "", group = "";
-        try
+        string release = track.ArtworkReleaseId, group = track.ArtworkReleaseGroupId;
+        if (track.HasEmbeddedArtwork != false) try
         {
             using var audio = TagLib.File.Create(new PlayerLibrary.ReadOnlyAudio(audioPath));
             var picture = audio.Tag.Pictures.FirstOrDefault(p => p.Type == TagLib.PictureType.FrontCover) ?? audio.Tag.Pictures.FirstOrDefault();
@@ -260,7 +260,8 @@ public sealed class ArtworkService
             request.Headers.UserAgent.ParseAdd("RockboxManager/1.1 (+https://github.com/evchuk4018/rockbox)");
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
             if (response.StatusCode == HttpStatusCode.NotFound) return null;
-            if ((response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.ServiceUnavailable) && attempt < 2)
+            if (response.StatusCode is (HttpStatusCode.TooManyRequests or HttpStatusCode.InternalServerError or
+                HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout) && attempt < 2)
             {
                 var wait = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2 * (attempt + 1));
                 await Task.Delay(wait > TimeSpan.FromSeconds(15) ? TimeSpan.FromSeconds(15) : wait, cancellation); continue;

@@ -26,6 +26,8 @@ public static class PlayerLibrary
                 var title = Path.GetFileNameWithoutExtension(file);
                 string artist = "", album = "", genre = "", albumArtist = "";
                 uint disc = 0, number = 0;
+                bool? hasArtwork = null;
+                string release = "", releaseGroup = "";
                 var duration = TimeSpan.Zero;
                 try
                 {
@@ -35,6 +37,9 @@ public static class PlayerLibrary
                     album = tags.Tag.Album ?? "";
                     albumArtist = string.Join(", ", tags.Tag.AlbumArtists);
                     disc = tags.Tag.Disc; number = tags.Tag.Track;
+                    hasArtwork = tags.Tag.Pictures.Length > 0;
+                    release = tags.Tag.MusicBrainzReleaseId ?? "";
+                    releaseGroup = tags.Tag.MusicBrainzReleaseGroupId ?? "";
                     genre = string.Join(", ", tags.Tag.Genres);
                     duration = tags.Properties.Duration;
                 }
@@ -42,7 +47,8 @@ public static class PlayerLibrary
                     TagLib.UnsupportedFormatException or TagLib.CorruptFileException or ArgumentException or NotSupportedException)
                 { /* A failed tag read must not hide the audio file. */ }
                 tracks.Add(new(new(volume.Storage, relative), title, artist, album, genre, duration,
-                    AlbumArtist: albumArtist, DiscNumber: disc, TrackNumber: number));
+                    AlbumArtist: albumArtist, DiscNumber: disc, TrackNumber: number)
+                { HasEmbeddedArtwork = hasArtwork, ArtworkReleaseId = release, ArtworkReleaseGroupId = releaseGroup });
                 if (tracks.Count % 25 == 0) progress?.Report($"Reading music… {tracks.Count:N0} songs");
             }
         }

@@ -31,12 +31,12 @@ public partial class App : Application
                     .Select(p => JsonSerializer.Deserialize<SyncBatch>(File.ReadAllText(p)))
                     .Any(b => b is { Started: true, Complete: false } && b.DeviceId == device.Id))
                     throw new InvalidOperationException("Finish or reload the interrupted send in Manager before backfilling artwork.");
-                var tracks = await Task.Run(() => PlayerLibrary.Scan(device));
+                var progress = new Progress<string>(text => File.WriteAllText(reportPath + ".progress.txt", text));
+                var tracks = await Task.Run(() => PlayerLibrary.Scan(device, progress));
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
                 var service = new ArtworkService(Path.Combine(DataRoot, "Artwork"), ArtworkDecoder.Decode, http);
                 var reviewIndex = Array.IndexOf(e.Args, "--release-review");
                 int hints = reviewIndex >= 0 && reviewIndex + 1 < e.Args.Length ? service.ImportVerifiedReview(e.Args[reviewIndex + 1], tracks) : 0;
-                var progress = new Progress<string>(text => File.WriteAllText(reportPath + ".progress.txt", text));
                 var prepared = await Task.Run(() => service.Prepare(device, tracks, progress));
                 var session = EditSession.Load(device);
                 session.ArtworkChanges.AddRange(prepared.Where(p => p.Change is not null).Select(p => p.Change!)
