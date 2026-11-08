@@ -23,6 +23,8 @@
 /* '*kbd', same format as https://www.rockbox.org/wiki/LoadableKeyboardLayouts */
 
 int kbd_input(char* buffer, int buflen, ucschar_t *kbd);
+/* Explicit font for compact custom layouts; the normal keyboard is unchanged. */
+int kbd_input_with_font(char* buffer, int buflen, ucschar_t *kbd, int font);
 
 int load_kbd(unsigned char* filename);
 

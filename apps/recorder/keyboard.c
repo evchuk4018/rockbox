@@ -428,9 +428,9 @@ static int get_kbd_row_len(struct keyboard_parameters *pm, int y)
 #endif /* HAVE_TOUCHSCREEN */
 
 static void kbd_calc_pm_params(struct keyboard_parameters *pm,
-                            struct screen *sc, struct edit_state *state);
+                            struct screen *sc, struct edit_state *state, int input_font);
 static void kbd_calc_vp_params(struct keyboard_parameters *pm,
-                            struct screen *sc, struct edit_state *state);
+                            struct screen *sc, struct edit_state *state, int input_font);
 static void kbd_draw_picker(struct keyboard_parameters *pm,
                             struct screen *sc, struct edit_state *state);
 static void kbd_draw_edit_line(struct keyboard_parameters *pm,
@@ -449,7 +449,7 @@ static void kbd_move_picker_horizontal(struct keyboard_parameters *pm,
 static void kbd_move_picker_vertical(struct keyboard_parameters *pm,
                                      struct edit_state *state, int dir);
 
-int kbd_input(char* text, int buflen, ucschar_t *kbd)
+int kbd_input_with_font(char* text, int buflen, ucschar_t *kbd, int input_font)
 {
     bool done = false;
     struct keyboard_parameters * const param = kbd_param;
@@ -643,14 +643,17 @@ int kbd_input(char* text, int buflen, ucschar_t *kbd)
             pm->kbd_buf_ptr = kbd;
         else
             pm->kbd_buf_ptr = pm->kbd_buf; /* internal layout buffer */
+        /* Cached row offsets belong to the previous layout and font. */
+        pm->last_i = pm->last_k = 0;
+        pm->x = pm->y = pm->page = 0;
 
         struct screen *sc = &screens[l];
 
-        kbd_calc_pm_params(pm, sc, &state);
+        kbd_calc_pm_params(pm, sc, &state, input_font);
 
         keyboard_layout(pm->kbd_viewports, pm, sc);
         /* have all the params we need lets set up our viewports */
-        kbd_calc_vp_params(pm, sc, &state);
+        kbd_calc_vp_params(pm, sc, &state, input_font);
         /* We want these the same height */
         pm->kbd_viewports[eKBD_VP_MENU].height = pm->main_y;
         pm->kbd_viewports[eKBD_VP_PICKER].height = pm->main_y;
@@ -922,8 +925,12 @@ cleanup:
     }
     return ret;
 }
+int kbd_input(char* text, int buflen, ucschar_t *kbd)
+{
+    return kbd_input_with_font(text, buflen, kbd, FONT_SYSFIXED - 1);
+}
 static void kbd_calc_pm_params(struct keyboard_parameters *pm,
-                            struct screen *sc, struct edit_state *state)
+                            struct screen *sc, struct edit_state *state, int input_font)
 {
     struct font* font;
     const unsigned char *p;
@@ -940,6 +947,7 @@ static void kbd_calc_pm_params(struct keyboard_parameters *pm,
     else
 #endif
     pm->curfont = pm->default_lines ? FONT_SYSFIXED : sc->getuifont();
+    if (input_font >= FONT_SYSFIXED) pm->curfont = input_font;
     font = font_get(pm->curfont);
     pm->font_h = font->height;
 
@@ -986,7 +994,7 @@ static void kbd_calc_pm_params(struct keyboard_parameters *pm,
 }
 
 static void kbd_calc_vp_params(struct keyboard_parameters *pm,
-                            struct screen *sc, struct edit_state *state)
+                            struct screen *sc, struct edit_state *state, int input_font)
 {
     (void) state;
     struct viewport *vp = &pm->kbd_viewports[eKBD_VP_PICKER];
@@ -1024,11 +1032,14 @@ static void kbd_calc_vp_params(struct keyboard_parameters *pm,
 recalc_param:
 #endif
     pm->lines = sc_h / pm->font_h - 1;
+    /* Explicit layouts already have a separate text viewport above the picker. */
+    if (input_font >= FONT_SYSFIXED) pm->lines = (sc_h - 3) / pm->font_h;
 
     if (pm->default_lines && pm->lines > pm->default_lines)
         pm->lines = pm->default_lines;
 
     pm->keyboard_margin = sc_h - (pm->lines+1)*pm->font_h;
+    if (input_font >= FONT_SYSFIXED) pm->keyboard_margin += pm->font_h;
 
     if (pm->keyboard_margin < 3 && pm->lines > 1)
     {

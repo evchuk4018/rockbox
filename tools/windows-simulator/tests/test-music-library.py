@@ -12,6 +12,52 @@ spec.loader.exec_module(home)
 
 
 class MusicTests(unittest.TestCase):
+    def test_large_keyboard_fits_clip_display(self):
+        keyboard = (home.ROOT / "apps/recorder/keyboard.c").read_text(encoding="utf-8")
+        # Skip the forward declaration when extracting the production body.
+        production = home.function(keyboard[keyboard.index("int kbd_input_with_font("):],
+                                   "static void kbd_calc_vp_params(")
+        source = r'''
+#include <assert.h>
+#include <stddef.h>
+#define FONT_SYSFIXED -1
+#define DEFAULT_MARGIN 6
+typedef unsigned int ucschar_t;
+struct viewport {unsigned width,height;};
+enum {eKBD_VP_PICKER};
+struct screen {int screen_type;};
+struct edit_state {int unused;};
+struct keyboard_parameters {
+    struct viewport *kbd_viewports;ucschar_t *kbd_buf_ptr;
+    unsigned font_w,font_h,max_line_len,text_w;
+    int max_chars,max_chars_text,lines,default_lines,keyboard_margin,pages,page,x,y,main_y;
+};
+static unsigned get_icon_width(int screen) {(void)screen;return 6;}
+'''
+        source += production + r'''
+int main(void) {
+    struct viewport vp={128,48};struct screen screen={0};struct edit_state state={0};
+    ucschar_t keys[]={13,'A','B','C','D','E','F','G','H','I','J','K','L','M',
+                     13,'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+                     11,'0','1','2','3','4','5','6','7','8','9',0x2423,0xFEFF};
+    struct keyboard_parameters pm={.kbd_viewports=&vp,.kbd_buf_ptr=keys,
+        .font_w=6,.font_h=12,.max_line_len=16,.text_w=6,.default_lines=4};
+    kbd_calc_vp_params(&pm,&screen,&state,3);
+    assert(pm.pages==1&&pm.lines==3&&pm.max_chars>=13);
+    assert(pm.main_y>=36&&pm.main_y+16<=64);
+    pm.font_w=6;pm.font_h=8;
+    kbd_calc_vp_params(&pm,&screen,&state,FONT_SYSFIXED-1);
+    assert(pm.pages==1&&pm.lines==3&&pm.main_y+16<=64);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="rockbox-search-keyboard-") as directory:
+            path = Path(directory) / "keyboard.c"
+            path.write_text(source, encoding="utf-8")
+            executable = path.with_suffix(".exe")
+            subprocess.run([home.GCC, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+                            str(path), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
+
     def test_production_catalog_groups_and_song_actions(self):
         production = (home.ROOT / "apps/music_library.c").read_text(encoding="utf-8")
         signatures = ["void music_library_request(", "bool music_library_pending(",
@@ -117,8 +163,13 @@ static char artist[TAG_MAXLEN],album[TAG_MAXLEN],query[MAX_PATH];
 static int keyboard_index,keyboard_returns[8];
 static const char *keyboard_text[8];
 typedef uint32_t ucschar_t;
-static int kbd_input(char *text,int size,ucschar_t *kbd) {
-    const char *expected="abcdefghijklmnopqrstuvwxyz0123456789";
+#define FONT_DIR "/.rockbox/fonts"
+static int loaded_fonts;
+static int font_load(const char *p) {assert(!strcmp(p,FONT_DIR "/12-ProFont.fnt"));loaded_fonts++;return 3;}
+static void font_unload(int id) {assert(id==3);loaded_fonts--;}
+static int kbd_input_with_font(char *text,int size,ucschar_t *kbd,int font) {
+    const char *expected="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    assert(font==3&&loaded_fonts==1);
     int keys=0,rows=0;
     assert(kbd);
     for(ucschar_t *row=kbd;*row!=0xFEFF;row+=*row+1) {
@@ -284,7 +335,7 @@ int main(void) {
     events[0]=(struct event){ACTION_STD_OK,1,"No matches",0};
     events[1]=(struct event){ACTION_STD_OK,0,"Search",1};
     events[2]=(struct event){SYS_USB_CONNECTED,1,"Second — A",0};
-    assert(music_library_screen(NULL)==GO_TO_ROOT&&!allocation&&!pins&&!themes);
+    assert(music_library_screen(NULL)==GO_TO_ROOT&&!allocation&&!pins&&!themes&&!loaded_fonts);
     assert(stopped==1); /* Browsing and editing leave audio alone. */
     puts("Catalog >16, nested names, allocation failure, artist/album identity, disc order and frozen song actions passed");
 }

@@ -345,8 +345,10 @@ Search headers are excluded from result indexes for playback and song actions.
 Filters apply only to their root page; each drilled page restores its parent's
 selection on Back. Query edits use a temporary keyboard buffer so cancellation
 cannot change the active filter. Queries are not persisted.
-Search passes a three-row custom layout to the existing keyboard: lowercase
-letters, digits, and its visible space key. The normal hold-middle submit,
+Search passes a three-row custom layout and bundled 12-pixel ProFont to the
+existing keyboard: capital letters, digits, and its visible space key. The
+explicit-font entry point uses the space below the text viewport for all three
+rows, and each keyboard session resets cached row offsets. The normal hold-middle submit,
 Home delete, and Power cancel controls are preserved. Other text-entry layouts
 are unchanged.
 

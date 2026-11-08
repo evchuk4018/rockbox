@@ -661,6 +661,13 @@ sub buildzip {
         print STDERR "No wps module present, can't do the WPS magic!\n";
     }
 
+    if ($modelname =~ /^(sansaclip|sansaclipplus)$/) {
+        glob_mkdir("$temp_dir/fonts");
+        system("$ROOT/tools/convbdf", "-f", "-o", "$temp_dir/fonts/12-ProFont.fnt",
+               "$ROOT/fonts/12-ProFont.bdf") == 0 or die "Search font conversion failed";
+        copy("$ROOT/docs/profontdoc.txt", "$temp_dir/docs/profontdoc.txt") or die "Search font notice copy failed";
+    }
+
     # until buildwps.pl is fixed, manually copy the classic_statusbar theme across
     mkdir "$temp_dir/wps/classic_statusbar", 0777;
     glob_copy("$ROOT/wps/classic_statusbar/*.bmp", "$temp_dir/wps/classic_statusbar");

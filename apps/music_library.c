@@ -31,6 +31,7 @@
 #include "kernel.h"
 #include "viewport.h"
 #include "keyboard.h"
+#include "font.h"
 
 static bool pending;
 static enum music_view requested;
@@ -334,17 +335,20 @@ static bool library_matches(const struct library_track *track)
 /* Work on a copy: the keyboard also modifies its buffer when canceled. */
 static bool library_edit_query(void)
 {
-    /* Search ignores case: one alphabet, digits and a visible space key. */
+    /* Search ignores case: large capitals, digits and a visible space key. */
     ucschar_t layout[] = {
-        13, 'a','b','c','d','e','f','g','h','i','j','k','l','m',
-        13, 'n','o','p','q','r','s','t','u','v','w','x','y','z',
+        13, 'A','B','C','D','E','F','G','H','I','J','K','L','M',
+        13, 'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
         11, '0','1','2','3','4','5','6','7','8','9',0x2423,
         0xFEFF
     };
     char text[sizeof(query)];
     strlcpy(text, query, sizeof(text));
     action_wait_for_release();
-    if (kbd_input(text, sizeof(text), layout) < 0) return false;
+    int font = font_load(FONT_DIR "/12-ProFont.fnt");
+    int ret = kbd_input_with_font(text, sizeof(text), layout, font);
+    if (font >= 0) font_unload(font);
+    if (ret < 0) return false;
     strlcpy(query, text, sizeof(query));
     return true;
 }

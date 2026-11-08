@@ -152,7 +152,7 @@ and track order, then title. These pages use the existing music database; run
 Database → Update Now after adding music or correcting tags.
 
 **Search** is the first Home row and opens the existing on-screen keyboard.
-The search keyboard has one lowercase alphabet, digits, and an outlined space
+The search keyboard has one large uppercase alphabet, digits, and an outlined space
 key. Move with the arrows and tap middle (**Space** in the simulator) to enter a
 character. **Hold middle/Space to submit**, tap Home (**Insert**) to delete, or
 press Power (**Esc**) to cancel.
