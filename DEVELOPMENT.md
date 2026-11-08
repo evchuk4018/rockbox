@@ -396,3 +396,8 @@ a second tag read for each file without embedded art. Unsupported tag reads keep
 an unknown hint and can retry normally. Both the GUI and unattended command report
 progress; HTTP 429 and temporary 500/502/503/504 responses use bounded retries.
 The final embedded/local fixture pass verifies installed covers produce no writes.
+
+The Manager Core harness can run in the official .NET 10 SDK Linux container
+when Windows Application Control blocks generated console assemblies. The actual
+portable Windows executable still needs its Windows fixture run. The file writer
+explicitly honors the read-only attribute before replacement on both platforms.

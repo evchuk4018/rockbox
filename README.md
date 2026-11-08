@@ -420,3 +420,36 @@ font. Visual, button and audio acceptance are left to the user as requested.
 Safely eject **both player volumes**, disconnect USB, restart, and check both
 layouts, progress, liking, long titles and a missing-cover placeholder. The
 separate pending album import remains outside this artwork update.
+
+## Side-by-side cover correction installed November 8, 2026
+
+Installed firmware **b47ff0ce6c-261108**. Now Playing has one layout: a full
+**61×61 cover** at the left, scrolling **song title and artist** at the right,
+a **128×3 progress bar** across the bottom, and a small like heart above the bar.
+This is the largest square cover that fits above that bar. Album text is omitted
+so albums whose names match the song no longer duplicate the title. The stacked
+layout, its setting and unused labels were removed; older saved layout keys are
+ignored. Existing button shortcuts remain available.
+
+Manager generates borderless `.61x61.bmp` covers and its preview uses an exact
+2× scale. All **506 existing covers** were regenerated and hash-verified. Original
+cached images are preferred; an offline legacy 44×44 cover is cropped to remove
+its old padding before enlargement. Older cover files and recovery support remain.
+The prior **277 unmatched/unavailable** and **two temporary lookup errors** retain
+the placeholder; no unverified artwork was substituted.
+
+Verified **337 firmware files** and **101 protected settings, database, playlist
+and personal files**. All **785 music files** retained their size and modification
+time; music was opened only for reading. No tags or database records were changed.
+
+Checks: eight native Home/skin checks, Windows simulator build, 34 Manager Core
+regressions on Linux, Windows portable publish and embedded/local artwork fixtures.
+Repeating the fixture send made no writes. Windows Application Control blocked the
+standalone console assembly, so the Core harness ran in the .NET 10 SDK container
+on the homelab; no Windows policy was changed. Visual checks are left to the user.
+
+Reports and verified originals: `C:/RockboxDev/logs/side-cover-20261108`.
+See `verification.json`, `backfill.json`, `installed-file-hashes.json` and
+`device-before/.rockbox`. The matching package is `rockbox.zip` there and in
+`rockbox/build-sansaclipplus`. Safely eject both volumes, disconnect USB and restart
+the Clip+ to load the corrected layout.
