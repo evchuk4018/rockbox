@@ -10,6 +10,7 @@ public sealed class FileChange
     public byte[]? Content { get; set; }
     public int Phase { get; set; }
     public bool Done { get; set; }
+    public SongPath? ArtworkTrack { get; set; }
     public string? DesiredHash => Content is null ? null : FileSnapshot.Digest(Content);
 }
 
@@ -55,6 +56,8 @@ public sealed class SyncBatch
             batch.Changes.Add(new() { Storage = old.Storage, RelativePath = old.RelativePath, BeforeHash = old.Hash, Phase = 2 });
         }
         batch.Changes = batch.Changes.OrderBy(c => c.Phase).ToList();
+        batch.Changes.AddRange(session.ArtworkChanges);
+        if (batch.Changes.Any(c => c.Storage == Storage.Sd || c.ArtworkTrack?.Storage == Storage.Sd)) batch.RequiresSd = true;
         return batch;
     }
 }
@@ -120,7 +123,7 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
                 // Conservative, small playlist-only requirement includes temporary replacement space.
                 var needed = group.Sum(c => (long)c.Content!.Length);
                 if (files.FreeBytes(device.Volume(group.Key)!.Root) < needed)
-                    throw new IOException($"There is not enough free space on {group.Key} storage to send these playlists.");
+                    throw new IOException($"There is not enough free space on {group.Key} storage to send these files.");
             }
             Directory.CreateDirectory(batch.BackupFolder);
             if (!batch.Started)
@@ -129,7 +132,7 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
                 {
                     var change = batch.Changes[i];
                     var original = files.Read(SafePath(device, change));
-                    if (Hash(original) != change.BeforeHash) throw new IOException("A playlist changed while preparing its backup. Reload the player.");
+                    if (Hash(original) != change.BeforeHash) throw new IOException("A player file changed while preparing its backup. Reload the player.");
                     if (original is not null) File.WriteAllBytes(Path.Combine(batch.BackupFolder, $"{i:D3}.original"), original);
                 }
                 batch.Started = true;
@@ -183,8 +186,20 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
         var isPins = change.Storage == Storage.Internal && relative == EditSession.PinsPath;
         var isPlaylist = relative.StartsWith("Playlists/", StringComparison.OrdinalIgnoreCase) &&
             (relative.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase));
-        if ((!isPins && !isPlaylist) || relative.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')))
-            throw new InvalidOperationException("Refusing to write outside playlists and the Home pin file.");
+        var isArtwork = change.ArtworkTrack is { } source && change.Content is { } bitmap && CoverConverter.IsCover(bitmap) &&
+            relative.EndsWith(".44x44.bmp", StringComparison.OrdinalIgnoreCase) &&
+            (change.Storage == source.Storage && relative.Equals(Path.ChangeExtension(source.RelativePath, null) + ".44x44.bmp", StringComparison.OrdinalIgnoreCase) &&
+                !relative.StartsWith(".rockbox/", StringComparison.OrdinalIgnoreCase) ||
+             change.Storage == Storage.Internal && relative.StartsWith(".rockbox/albumart/", StringComparison.Ordinal) && relative.Split('/').Length == 3);
+        if ((!isPins && !isPlaylist && !isArtwork) || relative.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')))
+            throw new InvalidOperationException("Refusing to write outside playlists, generated covers and the legacy Home pin file.");
+        if (isArtwork)
+        {
+            var audio = change.ArtworkTrack!;
+            PlaylistCodec.ValidatePath(audio.RockboxPath);
+            if (!PlayerLibrary.IsAudio(audio.RelativePath) || audio.RelativePath.Split('/').Any(p => p is ".." or "." or "" || p.Contains(':')) ||
+                !File.Exists(device.FilePath(audio.Storage, audio.RelativePath))) throw new IOException("The source song is unavailable.");
+        }
         PlaylistCodec.ValidatePath("/" + relative);
         var volume = device.Volume(change.Storage) ?? throw new IOException("Required storage is disconnected.");
         var root = Path.GetFullPath(volume.Root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;

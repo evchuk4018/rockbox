@@ -809,6 +809,13 @@ void draw_album_art(struct gui_wps *gwps, int handle_id, bool clear)
                                     STRIDE(gwps->display->screen_type,
                                         bmp->width, bmp->height),
                                    x, y, width, height);
+#if LCD_DEPTH == 1 && defined(HAVE_NEGATIVE_LCD)
+        /* BMP decoding maps dark pixels to set bits. A negative LCD lights
+         * set bits, so album photographs need the opposite polarity. */
+        gwps->display->set_drawmode(DRMODE_COMPLEMENT);
+        gwps->display->fillrect(x, y, width, height);
+        gwps->display->set_drawmode(DRMODE_SOLID);
+#endif
 #ifdef HAVE_LCD_INVERT
         if (global_settings.invert) {
             gwps->display->set_drawmode(DRMODE_COMPLEMENT);

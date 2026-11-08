@@ -31,8 +31,11 @@ public sealed record SongPath(Storage Storage, string RelativePath)
 }
 
 public sealed record Track(SongPath Path, string Title, string Artist, string Album,
-    string Genre, TimeSpan Duration, bool Available = true)
+    string Genre, TimeSpan Duration, bool Available = true, string AlbumArtist = "",
+    uint DiscNumber = 0, uint TrackNumber = 0)
 {
+    public string GroupArtist => string.IsNullOrWhiteSpace(AlbumArtist) ? Artist : AlbumArtist;
+    public string AlbumKey => LibraryViews.Identity(GroupArtist, Album);
     public string DurationLabel => Duration == TimeSpan.Zero ? "—" :
         Duration.TotalHours >= 1 ? Duration.ToString(@"h\:mm\:ss") : Duration.ToString(@"m\:ss");
     public string StorageLabel => Path.Storage == Storage.Sd ? "SD card" :

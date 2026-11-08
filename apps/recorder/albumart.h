@@ -25,6 +25,7 @@
 
 #include <stdbool.h>
 #include "metadata.h"
+#include "bmp.h"
 #include "skin_engine/skin_engine.h"
 
 /* Look for albumart bitmap in the same dir as the track and in its parent dir.

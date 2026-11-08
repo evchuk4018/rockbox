@@ -2,6 +2,7 @@ namespace RockboxManager.Core;
 
 public static class PlayerLibrary
 {
+    internal static bool IsAudio(string path) => AudioExtensions.Contains(Path.GetExtension(path));
     // Rockbox's built-in audio extensions (apps/filetypes.c). Unsupported tag formats still appear.
     private static readonly HashSet<string> AudioExtensions = new(
         ("mp3 mp2 mpa mp1 ogg oga wma wmv asf wav flac ac3 a52 mpc wv m4a m4b mp4 mod mpga " +
@@ -23,7 +24,8 @@ public static class PlayerLibrary
                 if (relative.StartsWith(".rockbox/", StringComparison.OrdinalIgnoreCase) ||
                     !AudioExtensions.Contains(Path.GetExtension(file))) continue;
                 var title = Path.GetFileNameWithoutExtension(file);
-                string artist = "", album = "", genre = "";
+                string artist = "", album = "", genre = "", albumArtist = "";
+                uint disc = 0, number = 0;
                 var duration = TimeSpan.Zero;
                 try
                 {
@@ -31,13 +33,16 @@ public static class PlayerLibrary
                     title = string.IsNullOrWhiteSpace(tags.Tag.Title) ? title : tags.Tag.Title;
                     artist = string.Join(", ", tags.Tag.Performers);
                     album = tags.Tag.Album ?? "";
+                    albumArtist = string.Join(", ", tags.Tag.AlbumArtists);
+                    disc = tags.Tag.Disc; number = tags.Tag.Track;
                     genre = string.Join(", ", tags.Tag.Genres);
                     duration = tags.Properties.Duration;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                     TagLib.UnsupportedFormatException or TagLib.CorruptFileException or ArgumentException or NotSupportedException)
                 { /* A failed tag read must not hide the audio file. */ }
-                tracks.Add(new(new(volume.Storage, relative), title, artist, album, genre, duration));
+                tracks.Add(new(new(volume.Storage, relative), title, artist, album, genre, duration,
+                    AlbumArtist: albumArtist, DiscNumber: disc, TrackNumber: number));
                 if (tracks.Count % 25 == 0) progress?.Report($"Reading music… {tracks.Count:N0} songs");
             }
         }
@@ -46,7 +51,7 @@ public static class PlayerLibrary
             .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
-    private sealed class ReadOnlyAudio(string path) : TagLib.File.IFileAbstraction
+    internal sealed class ReadOnlyAudio(string path) : TagLib.File.IFileAbstraction
     {
         public string Name => path;
         public Stream ReadStream => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

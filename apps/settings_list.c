@@ -2246,6 +2246,11 @@ const struct settings_list settings[] = {
 #endif
     TEXT_SETTING(F_THEMESETTING|F_NEEDAPPLY,wps_file, "wps",
                      DEFAULT_WPSNAME, WPS_DIR "/", ".wps"),
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    CHOICE_SETTING(0, clip_cover_layout, LANG_CLIP_COVER_LAYOUT, 0,
+                   "now playing layout", "stacked,side by side", NULL, 2,
+                   ID2P(LANG_CLIP_COVER_STACKED), ID2P(LANG_CLIP_COVER_SIDE)),
+#endif
     TEXT_SETTING(F_THEMESETTING|F_NEEDAPPLY,sbs_file, "sbs",
                      DEFAULT_SBSNAME, SBS_DIR "/", ".sbs"),
 #ifdef HAVE_REMOTE_LCD

@@ -101,49 +101,87 @@ int main(int argc, char **argv) {
                             "-o", str(executable)], check=True)
             subprocess.run([str(executable), str(ROOT / "wps/cabbiev2.sansaclip.wps")], check=True)
 
-    def test_clip_footer_layout(self):
+    def test_clip_cover_layout(self):
         import re
+        import struct
         skin = (ROOT / "wps/cabbiev2.sansaclip.wps").read_text(encoding="utf-8")
-        viewports = []
-        for block in skin.split("%V(")[1:]:
-            coordinates, content = block.split(")", 1)
-            x, y, width, height, _ = map(int, coordinates.split(","))
+        viewports = {}
+        for match in re.finditer(r"%V(l)?\(([^)]+)\)", skin):
+            fields = match[2].split(",")
+            label = fields.pop(0) if match[1] else str(match.start())
+            x, y, width, height, font = map(int, fields)
+            self.assertGreaterEqual(x, 0)
+            self.assertGreaterEqual(y, 0)
             self.assertLessEqual(x + width, 128)
             self.assertLessEqual(y + height, 64)
-            viewports.append((x, y, width, height, content))
-        progress = next(v for v in viewports if "%pb(" in v[4])
-        for viewport in viewports:
-            if any(token in viewport[4] for token in ("%xd(B", "%xd(D", "%xd(E", "%xd(F", "%xd(H", "%?hG")):
-                self.assertGreaterEqual(viewport[1], progress[1] + progress[3])
-        footer = sorted((v for v in viewports if v[1] >= progress[1] + progress[3]), key=lambda v: v[0])
-        for left, right in zip(footer, footer[1:]):
-            self.assertLessEqual(left[0] + left[2], right[0])
-        self.assertEqual(len(re.findall(r"%\?it<", skin)), 1)
-        self.assertIn("%?if(%id, !=, %it)", skin)
-        visualizer = next(v for v in viewports if "%?pL<" in v[4])
-        album = next(v for v in viewports if "%?id" in v[4])
-        self.assertGreaterEqual(visualizer[1], album[1] + album[3])
-        for token in ("%pc", "%pt"):
-            timer = next(v for v in viewports if token in v[4])
-            self.assertGreaterEqual(timer[1], visualizer[1] + visualizer[3])
-            self.assertLessEqual(timer[1] + timer[3], progress[1])
-        right_channel = next(v for v in viewports if "%?pR<" in v[4])
-        self.assertEqual(visualizer[3], 10)
-        self.assertEqual(right_channel[3], 10)
-        self.assertEqual(visualizer[0] + visualizer[2], right_channel[0])
-        self.assertIn("bars-right-clip.bmp", skin)
-        self.assertNotIn("%hV", skin)
-        self.assertNotIn("%pm", skin)
-        self.assertNotIn("%pr", skin)
-        self.assertNotIn("%Sx(Next:)", skin)
-        self.assertNotIn("%?It", skin)
-        self.assertIn("%xl(E,add-playlist-clip.bmp,0,0)", skin)
-        self.assertIn("%xd(E)", skin)
-        self.assertNotIn("%?mm", skin)
-        import struct
-        icon = (ROOT / "wps/cabbiev2/add-playlist-clip.bmp").read_bytes()
-        self.assertEqual(icon[:2], b"BM")
-        self.assertEqual(struct.unpack_from("<iiHH", icon, 18), (12, 8, 1, 1))
+            viewports[label] = (x, y, width, height)
+        self.assertEqual(viewports["b"], (42, 8, 44, 44))
+        self.assertEqual(viewports["d"], (3, 5, 44, 44))
+        self.assertLessEqual(viewports["a"][1] + viewports["a"][3], viewports["b"][1])
+        self.assertLessEqual(viewports["b"][1] + viewports["b"][3], viewports["c"][1])
+        self.assertIn("%?St(now playing layout)<%Vd(a)%Vd(b)%Vd(c)|%Vd(d)%Vd(e)%Vd(f)>", skin)
+        self.assertEqual(skin.count("%Cl("), 1)
+        self.assertEqual(skin.count("%?C<%Cd|%xd(N)>"), 2)
+        self.assertIn("%pb(0,0,111,3)", skin)
+        self.assertIn("%?hL<%xd(Hb)|%xd(Ha)>", skin)
+        for token in ("%pL", "%pR", "%pc", "%pt", "%xd(B", "%xd(D", "%xd(E", "%xd(F"):
+            self.assertNotIn(token, skin)
+        for target in ("sansaclip", "sansaclipplus"):
+            self.assertIn("#define HAVE_ALBUMART", (ROOT / f"firmware/export/config/{target}.h").read_text())
+        placeholder = (ROOT / "wps/cabbiev2/cover-missing-clip.bmp").read_bytes()
+        self.assertEqual(struct.unpack_from("<iiHH", placeholder, 18), (44, 44, 1, 1))
+        self.assertEqual(len(placeholder), 414)
+        setting = (ROOT / "apps/settings_list.c").read_text()
+        self.assertIn('clip_cover_layout, LANG_CLIP_COVER_LAYOUT, 0', setting)
+
+    def test_mono_albumart_polarity_and_missing_handle(self):
+        production = function((ROOT / "apps/gui/skin_engine/skin_display.c").read_text(), "void draw_album_art(")
+        code = r"""#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+#define LCD_DEPTH 1
+#define HAVE_NEGATIVE_LCD
+#define HAVE_LCD_INVERT
+#define DRMODE_COMPLEMENT 1
+#define DRMODE_SOLID 0
+#define DRMODE_INVERSEVID 2
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#define WPS_ALBUMART_ALIGN_CENTER 1
+#define WPS_ALBUMART_ALIGN_RIGHT 2
+#define WPS_ALBUMART_ALIGN_BOTTOM 2
+#define SKINOFFSETTOPTR(buffer,offset) (offset)
+#define get_skin_buffer(data) NULL
+#define STRIDE(screen,width,height) (width)
+typedef unsigned char fb_data;
+struct skin_albumart {int x,y,width,height,xalign,yalign;};
+struct bitmap {int width,height;unsigned char *data;};
+struct wps_data {struct skin_albumart *albumart;};
+struct screen {int screen_type;void (*bitmap_part)(const void *,int,int,int,int,int,int,int);void (*set_drawmode)(int);void (*fillrect)(int,int,int,int);};
+struct gui_wps {struct wps_data *data;struct screen *display;};
+static struct {bool invert;} global_settings;
+static struct bitmap bitmap={44,44,NULL};
+static int draws,complements,mode;
+static int bufgetdata(int handle,int size,void **out) {(void)size;*out=&bitmap;return handle==9?sizeof(bitmap):0;}
+static void draw(const void *data,int sx,int sy,int stride,int x,int y,int w,int h) {(void)data;assert(!sx&&!sy&&stride==44&&!x&&!y&&w==44&&h==44);draws++;}
+static void setmode(int value) {mode=value;}
+static void fill(int x,int y,int w,int h) {assert(!x&&!y&&w==44&&h==44);if(mode==DRMODE_COMPLEMENT)complements++;}
+""" + production + r"""
+int main(void) {
+ struct skin_albumart art={0,0,44,44,1,1};struct wps_data data={&art};struct screen display={0,draw,setmode,fill};struct gui_wps wps={&data,&display};
+ draw_album_art(&wps,9,false);assert(draws==1&&complements==1&&mode==DRMODE_SOLID);
+ draw_album_art(&wps,-1,false);draw_album_art(&wps,8,false);assert(draws==1&&complements==1);
+ global_settings.invert=true;draw_album_art(&wps,9,false);assert(draws==2&&complements==3&&mode==DRMODE_SOLID);
+ draw_album_art(&wps,9,true);assert(draws==2);
+ return 0;
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="rockbox-mono-art-") as directory:
+            source = Path(directory) / "art.c"
+            executable = Path(directory) / "art.exe"
+            source.write_text(code)
+            subprocess.run([GCC, "-std=gnu11", str(source), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
 
     def test_clip_button_events(self):
         import re

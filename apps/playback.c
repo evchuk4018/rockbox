@@ -1972,6 +1972,7 @@ static int audio_load_albumart(struct track_info *infop,
         }
 
         /* We can only decode jpeg for embedded AA */
+#ifdef HAVE_JPEG
         if (global_settings.album_art != AA_OFF &&
             hid < 0 && hid != ERR_BUFFER_FULL &&
             track_id3->has_embedded_albumart && (track_id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
@@ -1981,6 +1982,7 @@ static int audio_load_albumart(struct track_info *infop,
             user_data.embedded_albumart = &track_id3->albumart;
             hid = bufopen(track_id3->path, 0, TYPE_BITMAP, &user_data);
         }
+#endif
 
         if (global_settings.album_art != AA_OFF && !checked_image_file &&
             hid < 0 && hid != ERR_BUFFER_FULL)

@@ -7,9 +7,10 @@ public sealed class EditSession
     public PlayerDevice Device { get; }
     public List<PlaylistDraft> Playlists { get; } = [];
     public SyncBatch? PendingBatch { get; set; }
+    public List<FileChange> ArtworkChanges { get; } = [];
     public IEnumerable<PlaylistDraft> VisiblePlaylists => Playlists.Where(p => !p.Deleted);
     public PlaylistDraft Liked => Playlists.Single(p => p.IsLiked);
-    public int ChangedCount => Playlists.Count(p => p.IsDirty);
+    public int ChangedCount => Playlists.Count(p => p.IsDirty) + ArtworkChanges.Count;
     public bool IsDirty => ChangedCount > 0;
 
     private EditSession(PlayerDevice device)
@@ -144,6 +145,7 @@ public sealed class EditSession
     public void Discard()
     {
         EnsureEditable();
+        ArtworkChanges.Clear();
         Playlists.RemoveAll(p => p.IsNew);
         foreach (var playlist in Playlists) playlist.Reset();
     }

@@ -366,6 +366,9 @@ struct system_status
 
 struct user_settings
 {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    int clip_cover_layout; /* 0: stacked, 1: side by side */
+#endif
     /* audio settings */
     int balance;    /* stereo balance: -100 - +100 -100=left  0=bal +100=right  */
     int bass;       /* bass boost/cut in decibels                               */

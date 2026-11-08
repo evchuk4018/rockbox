@@ -21,6 +21,9 @@ public partial class MainWindow : Window
     private EditSession? session;
     private PlayerDevice? connected;
     private List<Track> library = [];
+    private Dictionary<SongPath, ArtworkResult> artwork = [];
+    private CancellationTokenSource? artworkCancellation;
+    private bool preparingArtwork;
     private Dictionary<SongPath, Track> trackIndex = [];
     private ICollectionView? rows;
     private string currentKey = "library";
@@ -30,7 +33,7 @@ public partial class MainWindow : Window
     private PlaylistDraft? CurrentPlaylist => currentKey.StartsWith("playlist:") && Guid.TryParse(currentKey[9..], out var id)
         ? session?.VisiblePlaylists.FirstOrDefault(p => p.Id == id) : currentKey == "liked" ? session?.Liked : null;
     private bool CanEdit => session is not null && connected is not null && !busy && session.PendingBatch is null;
-    private bool NaturalOrder => rows is not null && rows.SortDescriptions.Count == 0 && SearchBox.Text.Length == 0 && StorageFilter.SelectedIndex == 0;
+    private bool NaturalOrder => rows is not null && rows.SortDescriptions.Count == 0 && SearchBox.Text.Length == 0 && StorageFilter.SelectedIndex == 0 && GenreFilter.SelectedIndex <= 0;
 
     public MainWindow(DeviceDiscovery discovery)
     {
@@ -98,6 +101,7 @@ public partial class MainWindow : Window
 
     private async Task LoadDevice(PlayerDevice device, bool findRecovery = true)
     {
+        artworkCancellation?.Cancel();
         busy = true; UpdateChrome();
         ConnectionPanel.Visibility = Visibility.Visible;
         ConnectionTitle.Text = "Reading your player";
@@ -111,6 +115,10 @@ public partial class MainWindow : Window
                 Tracks: PlayerLibrary.Scan(device, progress, cancellation.Token)), cancellation.Token);
             if (closed) return;
             session = loaded.Session; library = loaded.Tracks;
+            artwork = [];
+            GenreFilter.ItemsSource = new[] { "All genres" }.Concat(library.Select(t => t.Genre).Where(g => g.Length > 0)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.CurrentCultureIgnoreCase)).ToList();
+            GenreFilter.SelectedIndex = 0;
             trackIndex = library.ToDictionary(t => t.Path);
             connected = device;
             if (findRecovery && Directory.Exists(App.BackupRoot))
@@ -142,6 +150,7 @@ public partial class MainWindow : Window
             StatusText.Text = ex.Message;
         }
         finally { busy = false; if (!closed) UpdateChrome(); }
+        if (!closed && session?.PendingBatch is null && connected is not null) _ = PrepareArtwork();
     }
 
     private void RefreshNavigation(string? selectKey = null)
@@ -150,6 +159,7 @@ public partial class MainWindow : Window
         var target = AddTarget.SelectedItem as PlaylistDraft;
         navigating = true;
         var nav = new List<NavItem> { new("library", "♫  All music", $"{library.Count:N0} songs · combined library"),
+            new("artists", "Artists", "Browse by album artist"), new("albums", "Albums", "Browse in disc / track order"),
             new("liked", "♥  " + session.Liked.Label, $"{session.Liked.Entries.Count:N0} liked songs") };
         nav.AddRange(session.VisiblePlaylists.Where(p => !p.IsLiked).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => new NavItem("playlist:" + p.Id, p.Label, $"{p.Entries.Count:N0} songs · {p.CopyLabel}")));
@@ -160,6 +170,7 @@ public partial class MainWindow : Window
         AddTarget.ItemsSource = session.VisiblePlaylists.Where(p => !p.HasConflict).OrderBy(p => p.Name).ToList();
         AddTarget.SelectedItem = target is not null && !target.Deleted ? target : session.VisiblePlaylists.FirstOrDefault(p => !p.IsLiked && !p.HasConflict);
         navigating = false;
+        SetCatalog();
         ShowView();
     }
 
@@ -168,13 +179,32 @@ public partial class MainWindow : Window
         if (navigating || Navigation.SelectedItem is not NavItem nav) return;
         currentKey = nav.Key;
         SearchBox.Text = ""; StorageFilter.SelectedIndex = 0;
+        GenreFilter.SelectedIndex = 0;
+        SetCatalog();
         ShowView();
     }
+    private void SetCatalog()
+    {
+        var selected = (CatalogPicker.SelectedItem as CatalogItem)?.Key;
+        navigating = true;
+        CatalogPanel.Visibility = currentKey is "artists" or "albums" ? Visibility.Visible : Visibility.Collapsed;
+        if (currentKey is not ("artists" or "albums"))
+        { CatalogPicker.ItemsSource = null; navigating = false; return; }
+        CatalogLabel.Text = currentKey == "artists" ? "ARTIST" : "ALBUM";
+        CatalogPicker.ItemsSource = currentKey == "artists"
+            ? library.Select(t => t.GroupArtist).Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .Order(StringComparer.CurrentCultureIgnoreCase).Select(a => new CatalogItem(a, a.Length == 0 ? "Unknown artist" : a)).ToList()
+            : LibraryViews.Albums(library).Select(a => new CatalogItem(a.Key, $"{a.Name} — {a.Artist}")).ToList();
+        CatalogPicker.SelectedItem = CatalogPicker.Items.Cast<CatalogItem>().FirstOrDefault(c => c.Key == selected) ??
+            (CatalogPicker.Items.Count > 0 ? CatalogPicker.Items[0] : null);
+        navigating = false;
+    }
+    private void CatalogChanged(object sender, SelectionChangedEventArgs e) { if (!navigating && session is not null) ShowView(); }
     private void ShowView()
     {
         if (session is null) return;
         var playlist = CurrentPlaylist;
-        ViewTitle.Text = playlist?.Name ?? "All music";
+        ViewTitle.Text = playlist?.Name ?? (currentKey == "artists" ? "Artists" : currentKey == "albums" ? "Albums" : "All music");
         ViewCaption.Text = playlist is null ? "Search every song on your player. Select songs to build a playlist or update your likes." :
             playlist.IsLiked ? "The hearts on your player use this playlist. Removing an entry unlikes the song." :
             $"{playlist.Entries.Count:N0} songs · {playlist.CopyLabel} · Changes will be sent to both storage locations.";
@@ -186,6 +216,12 @@ public partial class MainWindow : Window
         var liked = session.Liked.Entries.ToHashSet();
         var shown = playlist is null ? library : playlist.Entries.Select(path => trackIndex.GetValueOrDefault(path) ??
             new Track(path, Path.GetFileNameWithoutExtension(path.RelativePath), "", "", "", TimeSpan.Zero, false)).ToList();
+        if (playlist is null && CatalogPicker.SelectedItem is CatalogItem catalog)
+        {
+            if (currentKey == "artists") shown = shown.Where(t => t.GroupArtist.Equals(catalog.Key, StringComparison.CurrentCultureIgnoreCase))
+                .OrderBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase).ThenBy(t => t.DiscNumber).ThenBy(t => t.TrackNumber).ThenBy(t => t.Title).ToList();
+            if (currentKey == "albums") shown = LibraryViews.Albums(shown).FirstOrDefault(a => a.Key == catalog.Key)?.Tracks ?? [];
+        }
         rows = new ListCollectionView(shown.Select((track, i) => new TrackRow(i, track, liked.Contains(track.Path))).ToList());
             rows.Filter = RowMatches;
             Songs.ItemsSource = rows;
@@ -197,8 +233,7 @@ public partial class MainWindow : Window
         var track = ((TrackRow)obj).Track;
         if (StorageFilter.SelectedIndex == 1 && track.Path.Storage != Storage.Internal ||
             StorageFilter.SelectedIndex == 2 && track.Path.Storage != Storage.Sd) return false;
-        var haystack = $"{track.Title} {track.Artist} {track.Album} {track.Genre} {track.Path.RelativePath}";
-        return SearchBox.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(word => haystack.Contains(word, StringComparison.OrdinalIgnoreCase));
+        return LibraryViews.Matches(track, SearchBox.Text, GenreFilter.SelectedIndex > 0 ? GenreFilter.SelectedItem as string : null);
     }
     private void FilterChanged(object sender, RoutedEventArgs e)
     {
@@ -207,13 +242,57 @@ public partial class MainWindow : Window
     }
     private void ClearFiltersClick(object sender, RoutedEventArgs e)
     {
-        SearchBox.Text = ""; StorageFilter.SelectedIndex = 0;
+        SearchBox.Text = ""; StorageFilter.SelectedIndex = 0; GenreFilter.SelectedIndex = 0;
         rows?.SortDescriptions.Clear();
         foreach (var column in Songs.Columns) column.SortDirection = null;
         UpdateChrome();
     }
     private void SongsSorting(object sender, DataGridSortingEventArgs e) => Dispatcher.BeginInvoke(UpdateChrome, DispatcherPriority.Background);
-    private void SongsSelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateRowCount(); UpdateChrome(); }
+    private void SongsSelectionChanged(object sender, SelectionChangedEventArgs e) { UpdateRowCount(); UpdateChrome(); UpdateCoverPreview(); }
+    private void UpdateCoverPreview()
+    {
+        CoverPreview.Source = null;
+        if (Songs.SelectedItem is not TrackRow row) { CoverStatus.Text = "Select a song to preview its cover."; return; }
+        CoverPreview.Source = ArtworkDecoder.Preview(CoverConverter.Placeholder());
+        if (!artwork.TryGetValue(row.Track.Path, out var cover)) { CoverStatus.Text = preparingArtwork ? "Preparing this song's artwork…" : "No prepared cover."; return; }
+        if (cover.Bitmap is not null) CoverPreview.Source = ArtworkDecoder.Preview(cover.Bitmap);
+        CoverStatus.Text = $"{cover.Status} · {row.Track.Album}" + (cover.Message.Length > 0 ? " · " + cover.Message : "");
+    }
+    private async Task PrepareArtwork()
+    {
+        if (session is null || connected is null || session.PendingBatch is not null) return;
+        var editing = session;
+        var sourceTracks = library;
+        artworkCancellation?.Cancel();
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+        artworkCancellation = operation; preparingArtwork = true; ArtworkRetry.IsEnabled = false;
+        var progress = new Progress<string>(text => { if (session == editing && !operation.IsCancellationRequested) ArtworkSummary.Text = text; });
+        try
+        {
+            var prepared = await Task.Run(async () =>
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+                var service = new ArtworkService(Path.Combine(App.DataRoot, "Artwork"), ArtworkDecoder.Decode, http);
+                return await service.Prepare(editing.Device, sourceTracks, progress, operation.Token);
+            }, operation.Token);
+            if (session != editing || operation.IsCancellationRequested || editing.PendingBatch is not null) return;
+            artwork = prepared.ToDictionary(a => a.Track);
+            editing.ArtworkChanges.Clear();
+            editing.ArtworkChanges.AddRange(prepared.Where(a => a.Change is not null).Select(a => a.Change!)
+                .DistinctBy(c => (c.Storage, c.RelativePath)));
+            ArtworkSummary.Text = $"Artwork: {prepared.Count(a => a.Bitmap is not null):N0} ready / installed · " +
+                $"{prepared.Count(a => a.Status == "Missing"):N0} unavailable · {prepared.Count(a => a.Status is not ("Ready" or "Installed" or "Missing")):N0} need retry / attention.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        { if (session == editing) ArtworkSummary.Text = "Artwork preparation failed: " + ex.Message; }
+        finally
+        {
+            if (artworkCancellation == operation)
+            { artworkCancellation = null; preparingArtwork = false; ArtworkRetry.IsEnabled = !busy; UpdateCoverPreview(); UpdateChrome(); }
+        }
+    }
+    private async void ArtworkRetryClick(object sender, RoutedEventArgs e) { if (!busy && !preparingArtwork) await PrepareArtwork(); }
     private void UpdateRowCount()
     {
         if (rows is null) return;
@@ -238,7 +317,9 @@ public partial class MainWindow : Window
             UpButton.IsEnabled = DownButton.IsEnabled = !playlist.HasConflict && NaturalOrder && Songs.SelectedItems.Count > 0;
         }
         var batch = session?.PendingBatch;
-        var needsSd = batch?.RequiresSd ?? session?.Playlists.Any(p => p.IsDirty && !p.IsLiked) == true;
+        var needsSd = batch?.RequiresSd ?? (session?.Playlists.Any(p => p.IsDirty && !p.IsLiked) == true ||
+            session?.ArtworkChanges.Any(c => c.Storage == Storage.Sd || c.ArtworkTrack?.Storage == Storage.Sd) == true);
+        ArtworkRetry.IsEnabled = CanEdit && !preparingArtwork;
         var sdId = batch?.SdId ?? session?.Device.Sd?.Id;
         var storageReady = connected is not null && (!needsSd || connected.Sd is not null && connected.Sd.Id == sdId);
         SendButton.IsEnabled = !busy && storageReady && (session?.IsDirty == true || batch is not null);
@@ -353,8 +434,8 @@ public partial class MainWindow : Window
             if (File.Exists(manifest)) File.Move(manifest, Path.Combine(session.PendingBatch.BackupFolder, "abandoned-operation.json"), true);
             await LoadDevice(connected, findRecovery: false);
         }
-        else if (MessageBox.Show(this, "Discard all unsent playlist and like changes?", "Discard changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-        { session.Discard(); RefreshNavigation(); StatusText.Text = "Unsent changes discarded."; }
+        else if (MessageBox.Show(this, "Discard all unsent playlist, like and artwork changes?", "Discard changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        { artworkCancellation?.Cancel(); session.Discard(); RefreshNavigation(); StatusText.Text = "Unsent changes discarded."; }
     }
     private async void DevicePicked(object sender, SelectionChangedEventArgs e)
     { if (!busy && session is null && DevicePicker.SelectedItem is PlayerDevice device) await LoadDevice(device); }
@@ -362,6 +443,7 @@ public partial class MainWindow : Window
     private async void SendClick(object sender, RoutedEventArgs e)
     {
         if (session is null || !SendButton.IsEnabled) return;
+        artworkCancellation?.Cancel();
         busy = sending = true; UpdateChrome();
         try
         {
@@ -399,8 +481,9 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, text, "Unsent changes", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             { e.Cancel = true; return; }
         }
-        closed = true; timer.Stop(); cancellation.Cancel();
+        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel();
     }
+    private sealed record CatalogItem(string Key, string Label);
     private sealed record NavItem(string Key, string Label, string Caption);
     private sealed record TrackRow(int Index, Track Track, bool Liked)
     {

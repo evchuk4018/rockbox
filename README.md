@@ -1,7 +1,7 @@
 # Rockbox on Windows
 
 The portable **Rockbox Manager** desktop app manages the Clip+ library, mirrored
-playlists and likes. See [its usage and build guide](utils/rockbox-manager/README.md).
+playlists, likes and automatic monochrome covers. See [its usage and build guide](utils/rockbox-manager/README.md).
 
 Native Windows simulator setup for the **original SanDisk Sansa Clip v1**:
 Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The connected physical
@@ -231,35 +231,32 @@ playlist is created on the first like if absent; prepared relative paths and
 Unicode entries are supported. Saving normalizes it to a plain UTF-8 playlist
 of absolute paths, preserving other tracks and their order.
 
-Now Playing follows the reference layout: centered yellow song title, blue
-artist, then a smaller blue album line. The album line is hidden when it matches
-the song title. Repeated comma-separated artist credits display once without
-changing the music tags. Animated, audio-responsive bars sit above elapsed time (left) and total song
-duration (right), followed by the full-width progress bar. Each stereo channel
-uses the existing peak-meter levels with twelve visual levels, alternating
-shapes every 0.1 seconds, and extra height only for strong peaks. Low and middle
-bars keep their original heights: 1–4 pixels stay unchanged, while 5-pixel peaks
-reach 7 pixels and 6-pixel peaks reach 10. Quiet passages stay low. Pausing or stopping shows the low baseline.
+Now Playing offers **Stacked** (default: album name / cover / song title) and
+**Side by side** (cover left, album and song right). Choose under **Settings →
+Settings → General Settings → Display → Now Playing layout**. The choice is
+saved across restarts and switches without interrupting playback. Both layouts
+use the same 44×44 cover, readable scrolling text, a thin bottom progress bar,
+and a small outlined/filled like heart. Pause, seek, like and Middle + Up for
+Add to Playlist retain their existing physical shortcuts.
 
-Five evenly spaced footer icons sit below the progress bar: **battery/charging**,
-**shuffle/change genre**, **playback state**, **add to playlist**, and the **like heart**.
-The icons use clean pixel shapes matching the reference: battery, crossed arrows,
-filled play triangle (or pause/stop), playlist lines with a plus, and outlined/filled heart.
-The playlist-plus icon marks the Middle + Up shortcut. Repeat remains available
-through playback settings and the Quick Screen. Use the physical buttons and
-Quick Screen to operate the other controls.
-The track counter, lock/volume indicators, and Next section remain absent.
+Rockbox Manager automatically prepares covers from embedded/local artwork or
+verified MusicBrainz / Cover Art Archive matches. Select a song to preview its
+cover, then Send to Player to install the draft. Artist folders may contain
+multiple albums: track-specific `.44x44.bmp` files prevent sharing the wrong
+cover. Missing, ambiguous or unreadable artwork uses a record placeholder.
+No tag changes or database rebuild are needed for artwork. See the
+[Manager guide](utils/rockbox-manager/README.md#album-artwork) for defaults,
+backfill reports, caching and recovery.
 
 During Home genre autoplay, **hold Home (Insert), then press Left** in the Quick
 Screen to select **Change Genre**. A different genre is selected from playable
 Liked Songs, using the existing listening weights. The current song finishes;
 the next song begins a fresh mix in the selected genre. The Quick Screen shows
-the selected genre, and an **asterisk beside the shuffle icon** marks the pending
-change. Further presses leave the same request queued. **Next** starts it early;
+the selected genre. Further presses leave the same request queued. **Next** starts it early;
 pause and seek preserve it. Stop, backward track navigation, another playlist or
 Home session, and restarting clear it. If no other liked genre is available,
 the existing mix continues. In ordinary playlists the same shortcut toggles
-normal shuffle. The footer layout is specific to the Clip's Cabbie theme.
+normal shuffle. The artwork layouts are specific to the Clip's Cabbie theme.
 
 Initialize the music database once under **Settings → Settings → General
 Settings → Database → Initialize Now**, then restart if prompted. Genre autoplay

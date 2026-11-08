@@ -168,6 +168,7 @@ Test("Unreadable metadata falls back to filename without changing audio", () =>
     using var f = new Fixture(); var before = f.AudioHashes(); var tracks = PlayerLibrary.Scan(f.Device);
     Check(tracks.Count == 3 && tracks.All(t => t.Title.Length > 0)); Check(before.SequenceEqual(f.AudioHashes()));
 });
+ArtworkTests.Run(Test, condition => Check(condition));
 Console.WriteLine($"{tests - failures}/{tests} tests passed");
 return failures == 0 ? 0 : 1;
 

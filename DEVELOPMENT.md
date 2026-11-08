@@ -160,15 +160,15 @@ After building and seeding, the user should check the following with `run.ps1`:
     then re-enter the screen/restart to check persistence. Hold Up for pitch and
     hold Space for the context menu; releasing either must not toggle a like or
     pause. Confirm list Up/Space navigation still works.
-11. Check the Clip Cabbie reference layout: yellow title, blue artist, smaller
-    album, taller animated audio bars, left elapsed/right total time, progress, then battery,
-    shuffle, playback, playlist-plus, and heart. Check scrolling and a long album title;
-    album/title duplicates should hide the album line. Low bars should stay low,
-    while strong peaks jump higher for a more energetic contrast. Pause and
-    silence should show the baseline. Check the playlist-plus icon, seeking, pause,
-    and the end of a track. The counter, lock/volume icons, and Next stay absent.
+11. Check both Now Playing layouts under Display → Now Playing layout. Stacked
+    shows album / 44×44 cover / song; Side by side shows the cover left and album
+    and song right. Both retain progress and the like heart. Long names scroll.
+    Switch during playback and after pausing, then restart to check persistence.
+    Check a track with no artwork and a corrupt BMP after one with artwork: the
+    placeholder must appear rather than retaining the previous cover. Confirm
+    pause, seek, like and Add to Playlist shortcuts still work.
 12. Start Home autoplay, hold Insert, then press Left in the Quick Screen. Confirm
-    Change Genre shows its target and the asterisk appears. Let the current song
+    Change Genre shows its target. Let the current song
     finish: it must not restart or briefly
     play an old-genre successor. Repeat using manual Next. Pause/seek should keep
     the request; Stop, backward navigation, another playlist and restart should
@@ -360,3 +360,26 @@ It links Rockbox's actual substring matcher. Manual acceptance in the simulator
 and disconnected player: Home Search -> keyboard -> song results; Artists/Albums
 Search -> filter -> full contents -> Back; clear/cancel/no matches; long-press a
 result; select the second result; repeat while audio is playing or paused.
+
+## Clip monochrome album artwork
+
+Clip and Clip+ enable the existing album-art pipeline for prepared 44×44 BMPs.
+The original Clip Windows simulator exercises the same skin. JPEG decoding and
+resizing stay on the PC; embedded JPEG loading is compiled only with HAVE_JPEG.
+Plugin JPEG wrappers do not use core-only embedded-tag readers. `albumart.h`
+includes bitmap dimensions explicitly, and the scaler is omitted from monochrome
+core builds. On negative monochrome LCDs, album-art drawing corrects BMP polarity;
+static skin icons retain their usual polarity.
+
+`clip_cover_layout` is an ordinary persisted choice (`now playing layout`),
+defaulting to Stacked. One `%Cl` slot draws relative to mutually exclusive
+viewports, avoiding a skin reload and its playback stop. The Home suite checks
+skin parsing, viewport bounds, the placeholder and native drawing/polarity.
+
+Rockbox Manager keeps decoding in WPF, with conversion, exact matching, metadata
+grouping and output planning in Core. Scans and `--inspect` read audio through
+read-only streams. Background artwork prepares a draft; normal Send and the
+explicit `--backfill-artwork` command share the verified batch engine. Recovery
+manifests include a source song for every generated cover; the write boundary
+accepts only the fixed 44×44 1-bit format and permitted artwork destinations.
+Tests use temporary fixtures and injected HTTP responses/storage failures.

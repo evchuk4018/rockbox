@@ -1,43 +1,25 @@
-# Clip reference layout. SPDX-License-Identifier: GPL-2.0-or-later
+# Clip cover layout. SPDX-License-Identifier: GPL-2.0-or-later
 %wd
-%Fl(2,05-Cabbie-Bold.fnt)
-%Fl(3,06-Cabbie-Bold.fnt)
-%xl(B,battery-clip.bmp,0,0,9)
-%xl(D,shuffle-clip.bmp,0,0)
-%xl(E,add-playlist-clip.bmp,0,0)
-%xl(F,playmode-clip.bmp,0,0,5)
+%Cl(0,0,44,44)
 %xl(H,heart-clip.bmp,0,0,2)
-%xl(V,bars-clip.bmp,0,0,24)
-%xl(W,bars-right-clip.bmp,0,0,24)
-# Title in yellow, artist and smaller album in blue.
-%V(0,2,128,8,1)
+%xl(N,cover-missing-clip.bmp,0,0)
+# One album-art slot, drawn relative to the active artwork viewport.
+%?St(now playing layout)<%Vd(a)%Vd(b)%Vd(c)|%Vd(d)%Vd(e)%Vd(f)>
+# Stacked: album, cover, song. Shared bottom progress and heart.
+%Vl(a,2,0,124,8,1)
+%ac%s%?id<%id|%Sx(Unknown)>
+%Vl(b,42,8,44,44,1)
+%?C<%Cd|%xd(N)>
+%Vl(c,2,52,112,8,1)
 %ac%s%?it<%it|%fn>
-%V(0,16,128,8,1)
-%ac%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|%(root%)>>>
-%V(0,26,128,5,2)
-%ac%s%?id<%?if(%id, !=, %it)<%id>>
-# Stereo audio bars: low levels stay low; strong peaks jump higher.
-%V(25,32,39,10,1)
-%?mp<%xd(Va)|%t(0.1)%?pL<%xd(Va)|%xd(Vb)|%xd(Vc)|%xd(Vd)|%xd(Ve)|%xd(Vf)|%xd(Vg)|%xd(Vh)|%xd(Vi)|%xd(Vj)|%xd(Vk)|%xd(Vl)>;%t(0.1)%?pL<%xd(Vm)|%xd(Vn)|%xd(Vo)|%xd(Vp)|%xd(Vq)|%xd(Vr)|%xd(Vs)|%xd(Vt)|%xd(Vu)|%xd(Vv)|%xd(Vw)|%xd(Vx)>|%xd(Va)|%xd(Va)|%xd(Va)>
-%V(64,32,39,10,1)
-%?mp<%xd(Wa)|%t(0.1)%?pR<%xd(Wa)|%xd(Wb)|%xd(Wc)|%xd(Wd)|%xd(We)|%xd(Wf)|%xd(Wg)|%xd(Wh)|%xd(Wi)|%xd(Wj)|%xd(Wk)|%xd(Wl)>;%t(0.1)%?pR<%xd(Wm)|%xd(Wn)|%xd(Wo)|%xd(Wp)|%xd(Wq)|%xd(Wr)|%xd(Ws)|%xd(Wt)|%xd(Wu)|%xd(Wv)|%xd(Ww)|%xd(Wx)>|%xd(Wa)|%xd(Wa)|%xd(Wa)>
-%V(3,42,60,6,3)
-%al%pc
-%V(65,42,60,6,3)
-%ar%pt
-# Full-width progress above five evenly spaced footer icons.
-%V(0,48,128,6,1)
-%x(a,pbbackground-128x64x1.bmp,1,0)
-%pb(2,1,123,4,pb-128x64x1.bmp)
-%V(15,56,14,8,1)
-%?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>
-%V(39,56,12,8,1)
-%xd(D)
-%V(54,56,6,8,1)
-%?hG<*>
-%V(61,55,9,9,1)
-%?mp<%xd(Fa)|%xd(Fb)|%xd(Fc)|%xd(Fd)|%xd(Fe)>
-%V(80,56,12,8,1)
-%xd(E)
-%V(104,56,9,8,1)
+# Side by side: album above song beside the cover.
+%Vl(d,3,5,44,44,1)
+%?C<%Cd|%xd(N)>
+%Vl(e,54,4,72,8,1)
+%ac%s%?id<%id|%Sx(Unknown)>
+%Vl(f,54,28,72,16,1)
+%ac%s%?it<%it|%fn>
+%V(2,61,111,3,1)
+%pb(0,0,111,3)
+%V(117,56,9,8,1)
 %?hL<%xd(Hb)|%xd(Ha)>

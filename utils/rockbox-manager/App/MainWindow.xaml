@@ -26,10 +26,13 @@
             <StackPanel x:Name="PlaylistActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button Content="Rename" Click="RenameClick"/><Button Content="Duplicate" Click="DuplicateClick"/><Button Content="Delete" Click="DeleteClick" Margin="0"/></StackPanel>
           </Grid>
           <Border x:Name="ConflictBanner" Grid.Row="1" Background="#493D28" CornerRadius="8" Padding="12" Margin="0,0,0,14" Visibility="Collapsed"><StackPanel><TextBlock Text="The internal and SD copies differ. Choose the songs and order to keep." TextWrapping="Wrap" Margin="0,0,0,10"/><WrapPanel><Button Content="Use Internal Version" Click="UseInternalClick"/><Button Content="Use SD Version" Click="UseSdClick"/></WrapPanel></StackPanel></Border>
-          <Grid x:Name="SearchPanel" Grid.Row="2" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="SEARCH MUSIC" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><TextBox x:Name="SearchBox" TextChanged="FilterChanged" ToolTip="Search title, artist, album, genre, or filename" AutomationProperties.Name="Search music"/></StackPanel>
-            <StackPanel Grid.Column="1" Margin="12,0"><TextBlock Text="STORAGE" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><ComboBox x:Name="StorageFilter" SelectedIndex="0" SelectionChanged="FilterChanged"><ComboBoxItem Content="All storage"/><ComboBoxItem Content="Internal"/><ComboBoxItem Content="SD card"/></ComboBox></StackPanel>
-            <Button Grid.Column="2" Content="Clear filters / sort" Click="ClearFiltersClick" VerticalAlignment="Bottom" Margin="0" Padding="10,10"/>
+          <Grid x:Name="SearchPanel" Grid.Row="2" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel x:Name="CatalogPanel" Grid.ColumnSpan="4" Visibility="Collapsed" Margin="0,0,0,12"><TextBlock x:Name="CatalogLabel" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><ComboBox x:Name="CatalogPicker" DisplayMemberPath="Label" SelectionChanged="CatalogChanged" AutomationProperties.Name="Browse artist or album"/></StackPanel>
+            <StackPanel Grid.Row="1"><TextBlock Text="SEARCH MUSIC" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><TextBox x:Name="SearchBox" TextChanged="FilterChanged" ToolTip="Search title, artist, album artist, album, genre, or filename" AutomationProperties.Name="Search music"/></StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="1" Margin="12,0"><TextBlock Text="STORAGE" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><ComboBox x:Name="StorageFilter" SelectedIndex="0" SelectionChanged="FilterChanged"><ComboBoxItem Content="All storage"/><ComboBoxItem Content="Internal"/><ComboBoxItem Content="SD card"/></ComboBox></StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,12,0"><TextBlock Text="GENRE" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,0,0,6"/><ComboBox x:Name="GenreFilter" SelectionChanged="FilterChanged" AutomationProperties.Name="Genre filter"/></StackPanel>
+            <Button Grid.Row="1" Grid.Column="3" Content="Clear filters / sort" Click="ClearFiltersClick" VerticalAlignment="Bottom" Margin="0" Padding="10,10"/>
           </Grid>
           <WrapPanel x:Name="SongActions" Grid.Row="3" Margin="0,0,0,6">
             <ComboBox x:Name="AddTarget" Width="180" DisplayMemberPath="Name" Margin="0,0,8,8" ToolTip="Playlist to add selected songs to" AutomationProperties.Name="Destination playlist"/>
@@ -47,12 +50,19 @@
               <DataGridTextColumn Header="TITLE" Binding="{Binding Track.Title}" Width="2*"/>
               <DataGridTextColumn Header="ARTIST" Binding="{Binding Track.Artist}" Width="1.5*"/>
               <DataGridTextColumn Header="ALBUM" Binding="{Binding Track.Album}" Width="1.5*"/>
+              <DataGridTextColumn Header="ALBUM ARTIST" Binding="{Binding Track.GroupArtist}" Width="1.2*"/>
+              <DataGridTextColumn Header="DISC" Binding="{Binding Track.DiscNumber}" Width="45"/>
+              <DataGridTextColumn Header="TRACK" Binding="{Binding Track.TrackNumber}" Width="50"/>
               <DataGridTextColumn Header="GENRE" Binding="{Binding Track.Genre}" Width="*"/>
               <DataGridTextColumn Header="TIME" Binding="{Binding Track.DurationLabel}" SortMemberPath="Track.Duration" Width="65"/>
               <DataGridTextColumn Header="STORAGE" Binding="{Binding Location}" Width="95"/>
             </DataGrid.Columns>
           </DataGrid>
-          <TextBlock x:Name="RowCount" Grid.Row="5" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,12,0,0"/>
+          <Grid Grid.Row="5" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Border Background="Black" Width="88" Height="88" Margin="0,0,14,0"><Image x:Name="CoverPreview" RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Uniform" AutomationProperties.Name="Player cover preview"/></Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="RowCount" Foreground="{StaticResource Muted}" FontSize="12"/><TextBlock x:Name="CoverStatus" Text="Select a song to preview its cover." TextWrapping="Wrap" Margin="0,6,0,0"/><TextBlock x:Name="ArtworkSummary" Text="Artwork will be prepared automatically." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel>
+            <Button x:Name="ArtworkRetry" Grid.Column="2" Content="Retry artwork" Click="ArtworkRetryClick" VerticalAlignment="Center" Margin="12,0,0,0"/>
+          </Grid>
         </Grid></Border>
         <Border x:Name="ConnectionPanel" Background="{StaticResource Panel}" CornerRadius="12" Padding="50"><StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">
           <TextBlock Text="♫" Foreground="{StaticResource Accent}" FontSize="64" HorizontalAlignment="Center"/>

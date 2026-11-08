@@ -17587,3 +17587,48 @@
     *: "No matches"
   </voice>
 </phrase>
+
+<phrase>
+  id: LANG_CLIP_COVER_LAYOUT
+  desc: Clip monochrome artwork layout
+  user: core
+  <source>
+    *: "Now Playing layout"
+  </source>
+  <dest>
+    *: "Now Playing layout"
+  </dest>
+  <voice>
+    *: "Now Playing layout"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_CLIP_COVER_STACKED
+  desc: Clip monochrome artwork layout
+  user: core
+  <source>
+    *: "Stacked"
+  </source>
+  <dest>
+    *: "Stacked"
+  </dest>
+  <voice>
+    *: "Stacked"
+  </voice>
+</phrase>
+
+<phrase>
+  id: LANG_CLIP_COVER_SIDE
+  desc: Clip monochrome artwork layout
+  user: core
+  <source>
+    *: "Side by side"
+  </source>
+  <dest>
+    *: "Side by side"
+  </dest>
+  <voice>
+    *: "Side by side"
+  </voice>
+</phrase>

@@ -48,6 +48,9 @@
 /* define this if you would like tagcache to build on this target */
 #define HAVE_TAGCACHE
 
+/* PC-prepared monochrome BMP album covers. */
+#define HAVE_ALBUMART
+
 /* LCD dimensions */
 #define LCD_WIDTH  128
 #define LCD_HEIGHT 64

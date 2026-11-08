@@ -1,6 +1,6 @@
 # Rockbox Manager
 
-Portable Windows 11 x64 playlist manager for the customized Sansa Clip+ in this
+Portable Windows 11 x64 music and playlist manager for the customized Sansa Clip+ in this
 repository. The executable contains its .NET runtime and runs without admin rights.
 
 ## Run and use
@@ -11,8 +11,14 @@ identification files, USB device association, and volume serials, not drive lett
 or volume labels. Multiple players require choosing one. Other Rockbox targets
 and cards connected separately through a card reader are outside this version.
 
-- **All music:** search title, artist, album, genre, or filename; filter storage.
-  Select songs (Ctrl/Shift for multiple), choose a destination, and Add selected.
+- **All music:** search title, artist, album artist, album, genre, or filename;
+  filter storage and the exact `Genre-Subgenre` tag. Select songs (Ctrl/Shift for multiple), choose a destination, and Add selected.
+- **Artists / Albums:** browse by album artist (falling back to track artist).
+  Albums with the same title and different artists stay separate. Album tracks
+  use disc number, track number, then title. The table also displays these tags.
+- **Artwork:** covers prepare automatically in the background. Select a song for
+  its 44×44 player preview and status. Ready covers join the draft; Send to Player
+  writes them. Retry artwork retries failed lookups without changing music tags.
 - **Playlists:** create, rename, duplicate, delete, add songs, remove entries, or
   reorder with Up/Down or drag and drop. Clear filters and sorting before reordering.
   Removing entries or deleting playlists keeps the audio files.
@@ -22,7 +28,8 @@ and cards connected separately through a card reader are outside this version.
   the firmware's likes live on internal storage.
 - **Send to Player:** apply the pending changes. Ordinary playlist edits require
   both original storage volumes so internal and SD copies remain synchronized.
-  Likes can be sent without an SD card.
+  Likes can be sent without an SD card. Artwork requires the original storage
+  containing its source songs; covers are not mirrored between volumes.
 - **Discard changes:** reset the current draft. Drafts are held in memory until
   sending, and closing asks before discarding them. Disconnection retains drafts
   for the same player. Refresh reloads the library when no changes are pending.
@@ -40,6 +47,51 @@ After success, safely eject through Windows and disconnect. Open the playlist
 on the player and check its order and hearts. Playlist edits do not
 require rebuilding the music database. The app does not import/delete audio,
 edit tags, update firmware or scores, play audio, or eject the player.
+
+## Album artwork
+
+The Clip/Clip+ firmware in this repository supports PC-prepared monochrome BMPs.
+In **Settings → General Settings → Display → Now Playing layout**, choose
+**Stacked** (default: album / cover / song) or **Side by side** (cover left,
+album and song right). Both retain a thin progress bar and like heart. Long
+names scroll, and changing the layout keeps playback running. Existing pause,
+like and Add to Playlist button shortcuts keep working.
+
+Manager first checks embedded front artwork, track-specific local images, and
+album-specific local images. `cover`, `folder`, or `front` images apply only to
+folders containing one album. It then uses its PC cache, an existing generated
+player cover, or exact MusicBrainz / Cover Art Archive matches. Different versions
+and ambiguous artist/album matches keep the built-in placeholder. Network failures
+remain retryable. Requests identify the app, respect MusicBrainz's one-request-per-
+second limit, and use bounded retries. Missing online matches are cached for 24 hours.
+
+Sources and provenance are cached in `%LOCALAPPDATA%\RockboxManager\Artwork`.
+Conversion uses the supplied Sansa Cover Studio defaults: centered crop, 100% zoom,
+125% contrast, brightness 0, cutoff 128, edge detail 40%, auto-levels, Floyd–Steinberg,
+no inversion, and a two-pixel inset. Image resampling uses centered area sampling.
+There are no conversion controls in this version.
+
+Generated files are `<track-stem>.44x44.bmp` beside each audio file. A folder can
+therefore hold different albums without sharing a wrong generic cover. If the
+filename exceeds Rockbox's path limit, Manager uses the existing internal
+`.rockbox/albumart/<artist>-<album>.44x44.bmp` lookup when it fits without a naming
+collision. Otherwise the report identifies the path limitation. Audio files and
+embedded tags stay untouched. Covers need no database rebuild. Use this repository's
+matching firmware; stock Clip+ firmware does not enable album-art support.
+
+For an unattended backfill, close Manager and run:
+
+```powershell
+Start-Process C:\RockboxDev\rockbox\build-rockbox-manager\RockboxManager.exe -WindowStyle Hidden -Wait -ArgumentList '--backfill-artwork C:\RockboxDev\logs\artwork-report.json'
+```
+
+This requires exactly one detected player, prepares all current tracks, sends
+only changed covers through the normal verified send engine, and writes a JSON
+report plus a `.progress.txt` file. The optional `--release-review <path>` imports
+compatible verified results from `scripts/review-music-library.py`; the current
+album artist, artist, album, title and duration must agree before reuse. It does
+not retag or import audio. Fixtures also support this command. `--inspect` stays
+read-only and never prepares or sends artwork.
 
 ## Interrupted sends and recovery
 
@@ -91,7 +143,8 @@ players in this mode. Removing/recreating those folders simulates disconnection;
 do not point fixture folders at real devices or junctions. Regression tests use
 temporary folders and injected storage faults, never mounted hardware.
 
-Manual acceptance: connection gate; search and storage filters; create/add/remove/
+Manual acceptance: automatic cover preparation and selected-song preview;
+Artists/Albums and exact genre filtering; connection gate; search and storage filters; create/add/remove/
 reorder/rename/delete; likes; Discard; unsent-close prompt;
 disconnect/reconnect; mirrored-copy conflict choices; Send and on-player playback.
 

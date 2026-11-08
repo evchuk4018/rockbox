@@ -138,7 +138,7 @@ hosted/3ds/keyboard.c
 recorder/keyboard.c
 #endif
 recorder/peakmeter.c
-#if defined(HAVE_ALBUMART) || defined(HAVE_JPEG)
+#if (defined(HAVE_ALBUMART) && LCD_DEPTH > 1) || defined(HAVE_JPEG)
 recorder/resize.c
 #endif
 #ifdef HAVE_JPEG

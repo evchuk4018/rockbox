@@ -851,7 +851,9 @@ static int load_image(int fd, const char *path,
     int rc;
     struct bitmap *bmp = ringbuf_ptr(bufidx);
     struct dim *dim = data->dim;
+#ifdef HAVE_JPEG
     struct mp3_albumart *aa = data->embedded_albumart;
+#endif
 
     /* get the desired image size */
     bmp->width = dim->width, bmp->height = dim->height;
