@@ -8,6 +8,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Navigation;
 using System.Windows.Threading;
 using RockboxManager.Core;
 
@@ -21,6 +22,10 @@ public partial class MainWindow : Window
     private EditSession? session;
     private PlayerDevice? connected;
     private List<Track> library = [];
+    private ListeningProfile listening = ListeningProfile.Empty("Connect your player to read listening scores.");
+    private List<MusicSuggestion> suggestions = [];
+    private string discoveryStatus = "Select Find suggestions to explore new music.";
+    private CancellationTokenSource? discoveryCancellation;
     private Dictionary<SongPath, ArtworkResult> artwork = [];
     private CancellationTokenSource? artworkCancellation;
     private bool preparingArtwork;
@@ -76,6 +81,7 @@ public partial class MainWindow : Window
                 connected = found;
                 if (changed)
                 {
+                    discoveryCancellation?.Cancel();
                     if (found is not null && !session.IsDirty && session.PendingBatch is null) await LoadDevice(found);
                     else
                     {
@@ -102,6 +108,7 @@ public partial class MainWindow : Window
     private async Task LoadDevice(PlayerDevice device, bool findRecovery = true)
     {
         artworkCancellation?.Cancel();
+        discoveryCancellation?.Cancel();
         busy = true; UpdateChrome();
         ConnectionPanel.Visibility = Visibility.Visible;
         ConnectionTitle.Text = "Reading your player";
@@ -115,6 +122,9 @@ public partial class MainWindow : Window
                 Tracks: PlayerLibrary.Scan(device, progress, cancellation.Token)), cancellation.Token);
             if (closed) return;
             session = loaded.Session; library = loaded.Tracks;
+            listening = await Task.Run(() => ListeningProfile.Load(device, library), cancellation.Token);
+            suggestions = []; discoveryStatus = "Select Find suggestions to explore new music.";
+            UpdateDiscovery();
             artwork = [];
             GenreFilter.ItemsSource = new[] { "All genres" }.Concat(library.Select(t => t.Genre).Where(g => g.Length > 0)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.CurrentCultureIgnoreCase)).ToList();
@@ -160,6 +170,7 @@ public partial class MainWindow : Window
         navigating = true;
         var nav = new List<NavItem> { new("library", "♫  All music", $"{library.Count:N0} songs · combined library"),
             new("artists", "Artists", "Browse by album artist"), new("albums", "Albums", "Browse in disc / track order"),
+            new("discover", "Discover", "New music from your listening scores"),
             new("liked", "♥  " + session.Liked.Label, $"{session.Liked.Entries.Count:N0} liked songs") };
         nav.AddRange(session.VisiblePlaylists.Where(p => !p.IsLiked).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => new NavItem("playlist:" + p.Id, p.Label, $"{p.Entries.Count:N0} songs · {p.CopyLabel}")));
@@ -203,6 +214,10 @@ public partial class MainWindow : Window
     private void ShowView()
     {
         if (session is null) return;
+        var discover = currentKey == "discover";
+        DiscoveryPanel.Visibility = discover ? Visibility.Visible : Visibility.Collapsed;
+        Editor.Visibility = discover ? Visibility.Collapsed : Visibility.Visible;
+        if (discover) { UpdateDiscovery(); UpdateChrome(); return; }
         var playlist = CurrentPlaylist;
         ViewTitle.Text = playlist?.Name ?? (currentKey == "artists" ? "Artists" : currentKey == "albums" ? "Albums" : "All music");
         ViewCaption.Text = playlist is null ? "Search every song on your player. Select songs to build a playlist or update your likes." :
@@ -222,7 +237,7 @@ public partial class MainWindow : Window
                 .OrderBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase).ThenBy(t => t.DiscNumber).ThenBy(t => t.TrackNumber).ThenBy(t => t.Title).ToList();
             if (currentKey == "albums") shown = LibraryViews.Albums(shown).FirstOrDefault(a => a.Key == catalog.Key)?.Tracks ?? [];
         }
-        rows = new ListCollectionView(shown.Select((track, i) => new TrackRow(i, track, liked.Contains(track.Path))).ToList());
+        rows = new ListCollectionView(shown.Select((track, i) => new TrackRow(i, track, liked.Contains(track.Path), listening.Scores.GetValueOrDefault(track.Path))).ToList());
             rows.Filter = RowMatches;
             Songs.ItemsSource = rows;
         UpdateRowCount();
@@ -234,6 +249,67 @@ public partial class MainWindow : Window
         if (StorageFilter.SelectedIndex == 1 && track.Path.Storage != Storage.Internal ||
             StorageFilter.SelectedIndex == 2 && track.Path.Storage != Storage.Sd) return false;
         return LibraryViews.Matches(track, SearchBox.Text, GenreFilter.SelectedIndex > 0 ? GenreFilter.SelectedItem as string : null);
+    }
+    private void UpdateDiscovery()
+    {
+        ScoreSummary.Text = listening.Status;
+        GenreScores.ItemsSource = listening.Genres.Take(5).ToList();
+        Suggestions.ItemsSource = suggestions;
+        DiscoveryStatus.Text = listening.Genres.Count == 0
+            ? "Suggestions need scored songs with genre tags. Play music through Home genre autoplay, then reload scores."
+            : discoveryStatus;
+    }
+    private async void ReloadScoresClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || connected is null || discoveryCancellation is not null) return;
+        busy = true; UpdateChrome();
+        try
+        {
+            listening = await Task.Run(() => ListeningProfile.Load(connected, library), cancellation.Token);
+            suggestions = []; discoveryStatus = "Scores reloaded. Select Find suggestions for fresh picks.";
+            if (closed) return;
+            ShowView();
+        }
+        catch (OperationCanceledException) { }
+        finally { busy = false; if (!closed) UpdateChrome(); }
+    }
+    private async void FindSuggestionsClick(object sender, RoutedEventArgs e)
+    {
+        if (discoveryCancellation is not null) { discoveryCancellation.Cancel(); return; }
+        if (busy || listening.Genres.Count == 0 || session is null) return;
+        var editing = session;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+        discoveryCancellation = operation; UpdateChrome();
+        var progress = new Progress<string>(text =>
+        { if (session == editing && !operation.IsCancellationRequested) { discoveryStatus = text; DiscoveryStatus.Text = text; } });
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var result = await new DiscoveryService(http).Find(listening.Genres, library, progress, operation.Token);
+            if (session != editing || operation.IsCancellationRequested) return;
+            var retained = result.Suggestions.Count == 0 && suggestions.Count > 0;
+            if (!retained) suggestions = result.Suggestions;
+            discoveryStatus = (retained ? "Previous suggestions kept. " : "") + result.Status;
+        }
+        catch (OperationCanceledException) { if (session == editing) discoveryStatus = "Search canceled. Select Find suggestions to try again."; }
+        finally
+        {
+            if (discoveryCancellation == operation)
+            { discoveryCancellation = null; if (!closed) { UpdateDiscovery(); UpdateChrome(); } }
+        }
+    }
+    private void SuggestionNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        if (e.Uri.Scheme == "https" && e.Uri.Host == "musicbrainz.org")
+            try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch (Win32Exception ex) { ShowError("Could not open your browser: " + ex.Message); }
+        e.Handled = true;
+    }
+    private void CopySuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MusicSuggestion suggestion) return;
+        try { Clipboard.SetText($"{suggestion.Artist} — {suggestion.Title} ({suggestion.Kind})\n{suggestion.Url}"); }
+        catch (ExternalException) { ShowError("The clipboard is busy. Try copying again."); }
     }
     private void FilterChanged(object sender, RoutedEventArgs e)
     {
@@ -310,6 +386,9 @@ public partial class MainWindow : Window
         }
         else if (session is not null) { DeviceTitle.Text = "Player disconnected"; DeviceDetails.Text = "Reconnect the same Clip+ to send changes"; }
         NewButton.IsEnabled = CanEdit;
+        FindSuggestionsButton.Content = discoveryCancellation is null ? "Find suggestions" : "Cancel search";
+        FindSuggestionsButton.IsEnabled = discoveryCancellation is not null || !busy && session is not null && listening.Genres.Count > 0;
+        ReloadScoresButton.IsEnabled = !busy && connected is not null && discoveryCancellation is null;
         PlaylistActions.IsEnabled = SongActions.IsEnabled = ConflictBanner.IsEnabled = CanEdit;
         if (CurrentPlaylist is { } playlist)
         {
@@ -481,11 +560,11 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, text, "Unsent changes", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             { e.Cancel = true; return; }
         }
-        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel();
+        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel(); discoveryCancellation?.Cancel();
     }
     private sealed record CatalogItem(string Key, string Label);
     private sealed record NavItem(string Key, string Label, string Caption);
-    private sealed record TrackRow(int Index, Track Track, bool Liked)
+    private sealed record TrackRow(int Index, Track Track, bool Liked, double Points)
     {
         public int Number => Index + 1;
         public string Heart => Liked ? "♥" : "";

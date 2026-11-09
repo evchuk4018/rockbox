@@ -16,6 +16,8 @@ and cards connected separately through a card reader are outside this version.
 - **Artists / Albums:** browse by album artist (falling back to track artist).
   Albums with the same title and different artists stay separate. Album tracks
   use disc number, track number, then title. The table also displays these tags.
+- **Discover:** reads your player's listening scores and suggests a few new
+  albums and songs across your strongest genres. See [Listening scores and discovery](#listening-scores-and-discovery).
 - **Artwork:** covers prepare automatically in the background. Select a song for
   its 61×61 player preview and status. Ready covers join the draft; Send to Player
   writes them. Retry artwork retries failed lookups without changing music tags.
@@ -47,6 +49,64 @@ After success, safely eject through Windows and disconnect. Open the playlist
 on the player and check its order and hearts. Playlist edits do not
 require rebuilding the music database. The app does not import/delete audio,
 edit tags, update firmware or scores, play audio, or eject the player.
+
+## Listening scores and discovery
+
+Connect the player, then select **Discover** in the sidebar. Manager automatically
+reads `.rockbox/home-scores.tsv` from internal storage when loading the library.
+The **Score** column in music and playlist views shows current points and supports
+sorting. **Reload scores** refreshes listening data without discarding your drafts.
+The top-level Refresh action also reloads scores with the library.
+
+These are the player's Home genre-autoplay listening scores: a completed play
+earns two points; an exit at or beyond halfway earns one. Points halve every
+30 days. Listening in ordinary playlists does not earn these points. Invalid
+player timestamps retain the stored balance; future timestamps never increase
+it. Set the player's clock correctly for meaningful decay.
+
+Discover shows your top five genres and their points across listened songs.
+It ranks genres using total current points divided by the number of listened
+songs plus two. This balances average enjoyment with evidence from more than
+one song; songs with only early skips count toward the denominator. Unplayed
+songs do not count. The first genre tag on a song supplies its genre group.
+The library reader preserves compound parents such as `Hip-Hop/Rap` and
+`R&B/Soul` when an ID3 reader splits their slash into separate values.
+
+Choose **Find suggestions** to request up to four picks: an album and a song
+for each of your top two genres. MusicBrainz supplies real catalog entries.
+Searches try the subgenre in your `Genre-Subgenre` tags, then the parent genre,
+then your highest-scoring artist in that genre if needed. Labels such as
+`Pop-Dance` become dance-pop, `Rock-Alternative` becomes alternative rock, and
+`Hip-Hop/Rap-Trap` tries trap before hip hop. Each card explains the match,
+links to its catalog page and has **Copy details** for later searching.
+Existing albums and songs are excluded using their artist/title tags, plus
+MusicBrainz release-group IDs when present. Different artist credits or unusual
+tags can prevent duplicate detection. The comparison covers the connected
+player's library, including its connected SD card.
+
+Catalog queries send genre and artist names to MusicBrainz when you choose
+Find suggestions; the score file, paths, and listening counts stay local.
+Artwork and discovery share MusicBrainz's one-request-per-second budget.
+**Cancel search** stops a lookup. Catalog failures show a retry message and keep
+previous suggestions visible when no replacements are available. There is no
+account or API key to configure. Suggestions are held until the library or scores
+are reloaded; follow the catalog link to review a pick before acquiring music
+through your normal process. Manager does not download or import suggested audio.
+
+If there are no positive scores matched to songs with genre tags, Discover explains
+how to get started. Scores for missing songs or a disconnected SD card are excluded.
+The reader uses the last complete valid snapshot per exact, case-sensitive path,
+decodes escaped path characters once, and ignores an interrupted final row.
+It never edits the score file.
+
+For a JSON report without opening the main window:
+
+```powershell
+Start-Process C:\RockboxDev\rockbox\build-rockbox-manager\RockboxManager.exe -WindowStyle Hidden -Wait -ArgumentList '--suggest C:\RockboxDev\logs\suggestions.json'
+```
+
+This requires exactly one detected player, reads its music and scores, queries the
+catalog, and writes only the requested PC report. It also accepts `--fixture`.
 
 ## Album artwork
 
@@ -181,6 +241,9 @@ Manual acceptance: automatic cover preparation and selected-song preview;
 Artists/Albums and exact genre filtering; connection gate; search and storage filters; create/add/remove/
 reorder/rename/delete; likes; Discard; unsent-close prompt;
 disconnect/reconnect; mirrored-copy conflict choices; Send and on-player playback.
+Discovery acceptance: score sorting; top genres; Reload scores with an unsent draft;
+Find suggestions, reasons and catalog links; Copy details; cancel/offline states;
+no scored songs; and exclusion of existing albums/songs.
 
 The player now displays all catalog playlists on Home automatically. There is
 no pin limit or Home-order editor. Legacy pin files are left untouched. Persisted

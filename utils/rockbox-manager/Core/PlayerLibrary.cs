@@ -42,7 +42,10 @@ public static class PlayerLibrary
                     releaseGroup = tags.Tag.MusicBrainzReleaseGroupId ?? "";
                     if (tags.GetTag(TagLib.TagTypes.Id3v2) is TagLib.Id3v2.Tag id3)
                         videoId = YouTubeId(TagLib.Id3v2.UrlLinkFrame.Get(id3, "WOAS", false)?.Text.FirstOrDefault() ?? "") ?? "";
-                    genre = string.Join(", ", tags.Tag.Genres);
+                    // ID3v2.3 treats slash as a separator, including inside our parent genres.
+                    genre = string.Join(", ", tags.Tag.Genres)
+                        .Replace("Hip-Hop, Rap-", "Hip-Hop/Rap-", StringComparison.OrdinalIgnoreCase)
+                        .Replace("R&B, Soul-", "R&B/Soul-", StringComparison.OrdinalIgnoreCase);
                     duration = tags.Properties.Duration;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or

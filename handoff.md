@@ -1,4 +1,29 @@
-# Clip+ firmware and artwork handoff
+# Rockbox Manager and Clip+ handoff
+
+## Manager listening-score discovery — November 9, 2026
+
+Added Discover to the Windows Manager/loader. It reads the player's cumulative
+listening snapshots, applies score decay, ranks genres, and requests up to four
+MusicBrainz album/song suggestions outside the connected library. Music tables
+also have a sortable Score column. Reload scores preserves pending playlist edits.
+Compound Hip-Hop/Rap and R&B/Soul tags survive the metadata reader's slash splitting.
+See `utils/rockbox-manager/README.md` for use, ranking and the `--suggest` JSON mode.
+
+Validation: all 60 console regression tests pass, and the portable Windows build
+publishes to `C:/RockboxDev/rockbox/build-rockbox-manager/RockboxManager.exe`.
+A packaged headless live-catalog check scanned a 792-song local fixture, matched
+102 songs from the November 8 saved score snapshot and returned two albums plus
+two songs. Fixture sizes/timestamps and score SHA-256 stayed unchanged. Evidence
+is under `C:/RockboxDev/logs/discovery-20261109`, including `live-suggestions.json`
+and `verification.json`. These are saved player data, not a newly connected player.
+
+Windows Application Control blocked a later repeat launch of the published EXE.
+The final source passes the build/tests; final packaged launch and visual UI
+acceptance remain unverified. Do not change security policy to run it. The user
+requested no computer use; continue with command-line checks only. This update
+requires the Windows app, not a firmware or homelab service deployment.
+
+## Previous Clip+ firmware and artwork installation
 
 Updated November 8, 2026 (America/New_York). Both requested changes are installed
 on the original Clip+: the prior QOL firmware commit cfc4853983 and artwork/Manager

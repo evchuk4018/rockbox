@@ -15,6 +15,27 @@ public partial class App : Application
         var fixtureIndex = Array.IndexOf(e.Args, "--fixture");
         var fixture = fixtureIndex >= 0 && fixtureIndex + 1 < e.Args.Length ? e.Args[fixtureIndex + 1] : null;
         var discovery = new DeviceDiscovery(fixture);
+        var suggestIndex = Array.IndexOf(e.Args, "--suggest");
+        if (suggestIndex >= 0 && suggestIndex + 1 < e.Args.Length)
+        {
+            var reportPath = Path.GetFullPath(e.Args[suggestIndex + 1]);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+                var devices = await Task.Run(discovery.Find);
+                if (devices.Count != 1) throw new InvalidOperationException("Suggestions require exactly one identified Clip+.");
+                var tracks = await Task.Run(() => PlayerLibrary.Scan(devices[0]));
+                var profile = ListeningProfile.Load(devices[0], tracks);
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+                var result = await new DiscoveryService(http).Find(profile.Genres, tracks);
+                File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Created = DateTimeOffset.Now,
+                    Tracks = tracks.Count, profile.Status, Genres = profile.Genres, result.Suggestions,
+                    CatalogStatus = result.Status }, new JsonSerializerOptions { WriteIndented = true }));
+                Shutdown(0);
+            }
+            catch (Exception ex) { File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Error = ex.Message })); Shutdown(1); }
+            return;
+        }
         var prepareIndex = Array.IndexOf(e.Args, "--prepare-artwork");
         if (prepareIndex >= 0 && prepareIndex + 1 < e.Args.Length)
         {

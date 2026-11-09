@@ -25,7 +25,6 @@ public sealed class ArtworkService
     private readonly HttpClient http;
     private readonly Dictionary<string, CoverSource> resolved = [];
     private readonly Dictionary<string, string> releaseHints = [];
-    private DateTime nextMusicBrainz;
     private sealed record CoverSource(string Status, string Source = "", string Message = "", byte[]? Bytes = null,
         bool Converted = false, int SourceInset = 0, string Kind = "Album", string? OriginalPath = null,
         string? MetadataPath = null, CropRectangle? Crop = null);
@@ -490,11 +489,7 @@ public sealed class ArtworkService
         for (int attempt = 0; ; attempt++)
         {
             if (url.StartsWith("https://musicbrainz.org/", StringComparison.Ordinal))
-            {
-                var delay = nextMusicBrainz - DateTime.UtcNow;
-                if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellation);
-                nextMusicBrainz = DateTime.UtcNow.AddMilliseconds(1100);
-            }
+                await MusicBrainzRequests.Wait(cancellation);
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.UserAgent.ParseAdd("RockboxManager/1.1 (+https://github.com/evchuk4018/rockbox)");
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);

@@ -298,9 +298,14 @@ For current recommendations, apply
 `(score_q16 / 65536) * 2 ** (-max(0, now - updated) / 2592000)` using a clock
 consistent with the player's. If either timestamp is invalid, keep the stored
 balance. The device uses an integer approximation, with exact halving per full
-30-day interval, before adding new points. Counts never decay. This version
-provides readable data for external tools; automatic score import and external
-service integration are outside the feature.
+30-day interval, before adding new points. Counts never decay. Rockbox Manager's
+`Core/ListeningScores.cs` reads these snapshots without modifying them, joins exact
+paths to the scanned library and calculates decayed points and genre preferences.
+`Core/DiscoveryService.cs` requests a small set of MusicBrainz catalog suggestions,
+excluding known artist/title identities and album release-group IDs. Artwork and
+discovery share `Core/MusicBrainzRequests.cs` for request spacing. No network logic
+runs on the player. See the [Manager guide](utils/rockbox-manager/README.md#listening-scores-and-discovery)
+for ranking, fallback queries and the optional JSON report command.
 
 The setup compiled the simulator, codecs, and plugins and launched a responding
 Sansa Clip window. Manual button navigation, visible labels, file browsing, and
@@ -383,6 +388,10 @@ explicit `--backfill-artwork` command share the verified batch engine. Recovery
 manifests include a source song for every generated cover; the write boundary
 accepts only the 61×61 1-bit format (plus 44×44 for existing recovery manifests) and permitted artwork destinations.
 Tests use temporary fixtures and injected HTTP responses/storage failures.
+The listening/discovery tests also cover cumulative score rows, escaped and
+case-sensitive paths, interrupted writes, decay, genre ranking, duplicate
+exclusion, diverse catalog picks, fallback artist matching, cancellation and
+temporary/permanent catalog failures. These tests never need a live catalog.
 
 When transferring Windows source to the Linux build host, use `git archive` from
 the committed revision. Raw working-tree archives can preserve CRLF in plugin

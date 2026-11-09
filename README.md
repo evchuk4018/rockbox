@@ -1,7 +1,9 @@
 # Rockbox on Windows
 
 The portable **Rockbox Manager** desktop app manages the Clip+ library, mirrored
-playlists, likes and automatic monochrome covers. See [its usage and build guide](utils/rockbox-manager/README.md).
+playlists, likes and automatic monochrome covers. Its **Discover** view reads the
+player's listening scores and suggests new albums and songs from favorite genres.
+See [its usage and build guide](utils/rockbox-manager/README.md).
 
 Native Windows simulator setup for the **original SanDisk Sansa Clip v1**:
 Rockbox target `sansaclip` / `SANSA_CLIP`, 128×64 display. The connected physical
