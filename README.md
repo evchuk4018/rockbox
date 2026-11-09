@@ -526,4 +526,24 @@ fallback; repeating it made **zero writes**. Source JPEGs and centered 61x61 BMP
 passed decoding/format checks. Reports, contact sheets, deployment manifest and
 ZIP verification are under `C:/RockboxDev/logs/artwork-fallback-20261108`.
 
-See [handoff.md](handoff.md) for the current state and remaining USB deployment.
+See [handoff.md](handoff.md) for the current installation status and remaining
+physical checks.
+
+## Combined firmware and artwork installed November 8, 2026
+
+Installed the pending **cfc4853983-261108** QOL firmware and the artwork repair
+together on the original Clip+. All **341 firmware files** passed SHA-256
+read-back checks. Manager installed **279 new covers**; all **785 player songs**
+now have verified artwork (553 album covers and 232 exact-source thumbnails).
+The previous 506 covers are unchanged, and a repeated backfill made zero writes.
+
+All 785 music files retained their sizes and modification times. Hash checks
+confirmed 623 other files unchanged, including personal settings, database,
+playlists, likes and scores. Original firmware/settings and playlists are backed
+up under `C:/RockboxDev/logs/combined-deployment-20261108/device-before`.
+`verification.json` records the installation checks; `artwork-operation.json`
+preserves Manager's exact artwork change/recovery mapping.
+
+Safely eject both volumes, disconnect USB and restart to load the updated
+firmware. Physical display, button and playback checks remain for the user.
+No database rebuild is required. The separate TV Girl album import remains pending.
