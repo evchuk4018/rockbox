@@ -14,3 +14,28 @@ https://github.com/dotnet/wpf
 
 Dependencies are restored from NuGet. The published application embeds managed
 assemblies and extracts bundled native runtime components on startup.
+
+Portable podcast tools (Windows x64; pinned in podcast-tools.lock.json)
+yt-dlp 2026.10.26: Unlicense source; the standalone Windows release includes
+GPLv3+ components and is redistributed under GPLv3+. Copyright yt-dlp and
+youtube-dl contributors. Its release includes yt-dlp-ejs for Deno challenges.
+https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26
+https://github.com/yt-dlp/yt-dlp#license
+
+Deno 2.9.8: MIT, Copyright the Deno authors. Includes third-party components
+under their respective licenses. Source and complete third-party notices:
+https://github.com/denoland/deno/tree/v2.9.8
+https://github.com/denoland/deno/blob/v2.9.8/third_party/README.md
+
+FFmpeg and ffprobe 9.0.2 essentials build by Gyan Doshi: GPLv3-or-later,
+including libmp3lame (LGPL-2.0-or-later). Copyright the FFmpeg developers,
+LAME contributors and included library authors. Build source/configuration:
+https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2
+https://www.gyan.dev/ffmpeg/builds/
+https://github.com/FFmpeg/FFmpeg/tree/n9.0.2
+https://lame.sourceforge.io/
+
+License texts are packaged in tools/licenses/. Checksummed release URLs and
+the exact redistributed executable hashes are in tools/podcast-tools.lock.json
+and tools/manifest.json. No tool is automatically updated at runtime. To rebuild
+or replace a tool, use the linked corresponding source and retain its notices.

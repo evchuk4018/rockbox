@@ -172,6 +172,7 @@ ArtworkTests.Run(Test, condition => Check(condition));
 ThumbnailCropTests.Run(Test, condition => Check(condition));
 ArtworkLookupTests.Run(Test, condition => Check(condition));
 DiscoveryTests.Run(Test, condition => Check(condition));
+PodcastsTests.Run(Test, condition => Check(condition));
 Console.WriteLine($"{tests - failures}/{tests} tests passed");
 return failures == 0 ? 0 : 1;
 

@@ -17426,6 +17426,90 @@
   </voice>
 </phrase>
 <phrase>
+  id: LANG_PODCASTS
+  desc: Clip Home managed podcasts entry
+  user: core
+  <source>
+    *: "Podcasts"
+  </source>
+  <dest>
+    *: "Podcasts"
+  </dest>
+  <voice>
+    *: "Podcasts"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PODCAST_NEW
+  desc: New managed podcast episode
+  user: core
+  <source>
+    *: "New"
+  </source>
+  <dest>
+    *: "New"
+  </dest>
+  <voice>
+    *: "New"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PODCAST_SAVED
+  desc: Saved managed podcast episode
+  user: core
+  <source>
+    *: "Saved"
+  </source>
+  <dest>
+    *: "Saved"
+  </dest>
+  <voice>
+    *: "Saved"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PODCAST_PLAYED
+  desc: Played managed podcast episode
+  user: core
+  <source>
+    *: "Played"
+  </source>
+  <dest>
+    *: "Played"
+  </dest>
+  <voice>
+    *: "Played"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PODCAST_NO_EPISODES
+  desc: Managed podcast channel or catalog has no episodes
+  user: core
+  <source>
+    *: "No episodes this week"
+  </source>
+  <dest>
+    *: "No episodes this week"
+  </dest>
+  <voice>
+    *: "No episodes this week"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_PODCAST_SAVE_FAILED
+  desc: Managed podcast resume write failed
+  user: core
+  <source>
+    *: "Could not save podcast progress"
+  </source>
+  <dest>
+    *: "Could not save podcast progress"
+  </dest>
+  <voice>
+    *: "Could not save podcast progress"
+  </voice>
+</phrase>
+<phrase>
   id: LANG_PLAYLIST_ADDED
   desc: Clip Now Playing song added to an existing playlist
   user: core

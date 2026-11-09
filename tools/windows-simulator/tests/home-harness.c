@@ -346,6 +346,7 @@ static unsigned char *iso_decode(const unsigned char *input, unsigned char *out,
 
 enum { BUTTON_SELECT = 1, BUTTON_UP = 2, CONTEXT_WPS = 3, SYS_USB_CONNECTED = 4,
        GO_TO_ROOT = 5 };
+int podcast_screen(void) { return GO_TO_ROOT; }
 static int held_buttons, release_step, release_order, wait_calls, wps_leaves;
 static bool shortcut_usb;
 static int button_status(void) { return held_buttons; }

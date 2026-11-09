@@ -54,6 +54,7 @@ root_menu.c
 home_data.c
 home_liked.c
 home_screen.c
+podcasts.c
 music_library.c
 home_scores.c
 home_autoplay.c

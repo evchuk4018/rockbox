@@ -3,13 +3,14 @@
   <Grid Margin="22">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <Grid Margin="0,0,0,20">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <Border Background="{StaticResource Accent}" CornerRadius="10" Width="42" Height="42" Margin="0,0,13,0"><TextBlock Text="R" FontSize="26" FontWeight="Bold" Foreground="#10251A" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
         <StackPanel><TextBlock Text="ROCKBOX MANAGER" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="Your music. Your order." Foreground="{StaticResource Muted}" FontSize="12" Margin="0,3,0,0"/></StackPanel>
       </StackPanel>
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0"><TextBlock x:Name="DeviceTitle" Text="Looking for your player…" FontWeight="SemiBold" HorizontalAlignment="Right"/><TextBlock x:Name="DeviceDetails" Text="Connect your Clip+ with USB" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Right"/></StackPanel>
-      <Button Grid.Column="2" Content="Refresh" Click="RefreshClick" VerticalAlignment="Center" Margin="0"/>
+       <Button x:Name="PodcastsButton" Grid.Column="2" Content="Podcasts" Click="PodcastsClick" VerticalAlignment="Center"/>
+       <Button Grid.Column="3" Content="Refresh" Click="RefreshClick" VerticalAlignment="Center" Margin="0"/>
     </Grid>
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions><ColumnDefinition Width="242"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -86,6 +87,33 @@
             </StackPanel></Border>
           </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
         </DockPanel></Border>
+        <Border x:Name="PodcastPanel" Background="{StaticResource Panel}" CornerRadius="12" Padding="20" Visibility="Collapsed"><Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="150"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Podcasts" FontSize="27" FontWeight="SemiBold"/><TextBlock x:Name="PodcastWeekLabel" Foreground="{StaticResource Muted}" Margin="0,7,0,0"/></StackPanel>
+            <TextBlock x:Name="PodcastCount" Grid.Column="1" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="16,0"/>
+            <Button Grid.Column="2" Content="Prepare / refresh" Click="PodcastPrepareClick" Style="{StaticResource Primary}"/>
+          </Grid>
+          <Grid Grid.Row="1" Margin="0,18,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="PodcastUrl" ToolTip="Public HTTPS YouTube channel URL" AutomationProperties.Name="Podcast channel URL"/>
+            <Button Grid.Column="1" Content="Add channel" Click="PodcastAddClick" Style="{StaticResource Primary}" Margin="10,0,0,0"/>
+          </Grid>
+          <ListBox x:Name="PodcastSubscriptions" Grid.Row="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate><DataTemplate><Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Url}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/></StackPanel>
+              <Button Grid.Column="1" Content="Remove" Click="PodcastRemoveClick" Padding="10,5" Margin="10,0,0,0"/>
+            </Grid></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Grid.Row="3" Text="EPISODES IN LATEST COMPLETED DROP" Foreground="{StaticResource Muted}" FontSize="10" FontWeight="Bold" Margin="0,8,0,8"/>
+          <DataGrid x:Name="PodcastEpisodes" Grid.Row="4" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False">
+            <DataGrid.Columns><DataGridTextColumn Header="TITLE" Binding="{Binding Title}" Width="2*"/><DataGridTextColumn Header="CHANNEL" Binding="{Binding ChannelName}" Width="1.2*"/><DataGridTextColumn Header="PUBLISHED" Binding="{Binding PublishedLabel}" Width="170"/><DataGridTextColumn Header="TIME" Binding="{Binding DurationLabel}" Width="80"/></DataGrid.Columns>
+          </DataGrid>
+          <Grid Grid.Row="5" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel><ProgressBar x:Name="PodcastProgress" Height="5" Minimum="0" Maximum="1"/><TextBlock x:Name="PodcastStatus" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,7,0,0"/></StackPanel>
+            <Button x:Name="PodcastCancel" Grid.Column="1" Content="Cancel" Click="PodcastCancelClick" Margin="12,0,0,0"/>
+            <Button x:Name="PodcastRetry" Grid.Column="2" Content="Retry" Click="PodcastRetryClick" Margin="8,0,0,0"/>
+          </Grid>
+        </Grid></Border>
         <Border x:Name="ConnectionPanel" Background="{StaticResource Panel}" CornerRadius="12" Padding="50"><StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">
           <TextBlock Text="♫" Foreground="{StaticResource Accent}" FontSize="64" HorizontalAlignment="Center"/>
           <TextBlock x:Name="ConnectionTitle" Text="Connect your Clip+" FontSize="28" FontWeight="SemiBold" TextAlignment="Center" Margin="0,16,0,12"/>

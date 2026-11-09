@@ -15,6 +15,50 @@ public partial class App : Application
         var fixtureIndex = Array.IndexOf(e.Args, "--fixture");
         var fixture = fixtureIndex >= 0 && fixtureIndex + 1 < e.Args.Length ? e.Args[fixtureIndex + 1] : null;
         var discovery = new DeviceDiscovery(fixture);
+        var podcastSmoke = Array.IndexOf(e.Args, "--podcast-smoke");
+        if (podcastSmoke >= 0 && podcastSmoke + 1 < e.Args.Length)
+        {
+            var reportPath = Path.GetFullPath(e.Args[podcastSmoke + 1]);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+                var result = await Task.Run(async () =>
+                {
+                    // A fixed 19-second public test video; fixture-only, no subscriptions or devices.
+                    var tools = PortableToolPaths.BesideExecutable(); tools.Require();
+                    var metadata = await new ProcessRunner().RunAsync(PodcastToolArguments.VideoMetadata(tools,
+                        "https://www.youtube.com/watch?v=jNQXAC9IVRw"));
+                    if (metadata.ExitCode != 0) throw new IOException(metadata.StandardError);
+                    using var json = JsonDocument.Parse(metadata.StandardOutput);
+                    var video = json.RootElement;
+                    var week = PodcastWeek.PreviousCompleted(DateTimeOffset.FromUnixTimeSeconds(video.GetProperty("timestamp").GetInt64()).AddDays(7));
+                    var channel = new PodcastChannel(video.GetProperty("channel_id").GetString()!, video.GetProperty("channel").GetString()!);
+                    if (!YtDlpPodcastSource.TryEpisode(video, channel, week, out var episode)) throw new IOException("Public smoke video metadata is incomplete.");
+                    var data = reportPath + ".data";
+                    var cache = new PodcastCache(Path.Combine(data, "cache"));
+                    var prepared = await new PodcastMediaPreparer(tools, cache).PrepareAsync(episode!);
+                    var internalRoot = reportPath + ".fixture/Internal";
+                    var sdRoot = reportPath + ".fixture/SD";
+                    Directory.CreateDirectory(internalRoot); Directory.CreateDirectory(sdRoot);
+                    var device = new PlayerDevice("podcast-smoke", "Isolated podcast fixture",
+                        new(Storage.Internal, "smoke-internal", internalRoot, long.MaxValue), new(Storage.Sd, "smoke-sd", sdRoot, long.MaxValue));
+                    var catalog = new PodcastCatalog(week, [channel], [episode!]);
+                    var first = await new PodcastTransferService(data).PublishAsync(device, catalog, [prepared]);
+                    if (!first.Success) throw new IOException(first.Message);
+                    var target = Path.Combine(sdRoot, "Podcasts/RockboxManager", episode!.Id + ".mp3");
+                    var before = File.GetLastWriteTimeUtc(target);
+                    var repeat = await new PodcastTransferService(data).PublishAsync(device, catalog, []);
+                    if (!repeat.Success || before != File.GetLastWriteTimeUtc(target)) throw new IOException("Same-week repeat wrote audio.");
+                    return new { Mode = "IsolatedPodcastSmoke", episode.Id, episode.Title, prepared.Length, prepared.Hash,
+                        First = first, Repeat = repeat, SameWeekAudioUnchanged = true,
+                        InternalCatalog = Path.Combine(internalRoot, ".rockbox/podcasts/catalog.tsv") };
+                });
+                File.WriteAllText(reportPath, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                Shutdown(0);
+            }
+            catch (Exception ex) { File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Error = ex.ToString() })); Shutdown(1); }
+            return;
+        }
         var suggestIndex = Array.IndexOf(e.Args, "--suggest");
         if (suggestIndex >= 0 && suggestIndex + 1 < e.Args.Length)
         {

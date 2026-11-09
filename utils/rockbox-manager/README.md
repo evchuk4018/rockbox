@@ -32,6 +32,20 @@ and cards connected separately through a card reader are outside this version.
   both original storage volumes so internal and SD copies remain synchronized.
   Likes can be sent without an SD card. Artwork requires the original storage
   containing its source songs; covers are not mirrored between volumes.
+- **Podcasts:** open Podcasts from the top bar even while the player is disconnected.
+  Add or remove public HTTPS YouTube channel URLs. Manager resolves and persists stable
+  channel IDs, prepares the latest completed America/New_York Monday-Sunday drop in the
+  background, and shows channel names, dates, episode count, per-file progress, Cancel,
+  and Retry. Prepared audio is sent automatically when the original player and SD card
+  reconnect; it is also safe to retry from the Podcasts panel. No YouTube account or
+  browser cookies are used.
+
+  Portable podcast tools are loaded only from `tools` beside `RockboxManager.exe`:
+  `yt-dlp.exe`, `deno.exe`, `ffmpeg.exe`, and `ffprobe.exe`. Manager passes explicit
+  argument lists, ignores yt-dlp configuration, uses Deno for YouTube JavaScript, and
+  enforces stereo 128-kbps MP3 output. The PC cache is under
+  `%LOCALAPPDATA%\RockboxManager\Podcasts`; card audio is owned only under
+  `Podcasts/RockboxManager` and is excluded with `database.ignore`.
 - **Discard changes:** reset the current draft. Drafts are held in memory until
   sending, and closing asks before discarding them. Disconnection retains drafts
   for the same player. Refresh reloads the library when no changes are pending.
@@ -47,8 +61,78 @@ The Rockbox path buffer permits at most 259 UTF-8 bytes, including volume prefix
 
 After success, safely eject through Windows and disconnect. Open the playlist
 on the player and check its order and hearts. Playlist edits do not
-require rebuilding the music database. The app does not import/delete audio,
-edit tags, update firmware or scores, play audio, or eject the player.
+require rebuilding the music database. Managed podcast audio is downloaded,
+tagged, transferred and retired by Podcasts; music audio and scores are read-only.
+Firmware installation is a separate release step. Eject through Windows.
+
+## Weekly podcasts and Clip+ controls
+
+Subscriptions start empty. Open **Podcasts**, paste a public YouTube channel
+URL (`/@handle`, `/channel/UC…`, `/c/name`, or `/user/name`), and choose **Add**.
+Equivalent channel URLs resolve to the same stable channel ID. Remove changes
+the next synchronization. Manager must remain open for preparation and automatic
+USB transfer; there is no Windows background service or server downloader.
+
+The drop is the **previous Monday–Sunday in America/New_York**, including DST
+changes. For example, on November 9 the requested dates are November 2–8.
+Public regular Videos-tab uploads are included; Shorts, live/archived streams,
+and upcoming releases are excluded. Full publication timestamps determine
+inclusion; feeds with a fixed episode count are not used. A checked preparation
+is reused through the week, including after restarting Manager. Failed episodes
+can be retried without downloading completed MP3s again.
+
+**A successful replacement removes the entire old drop, including unfinished
+episodes and their positions.** Reconnecting in the same week preserves the
+installed drop and positions. Subscription changes prepare a replacement for
+that week. After several missed weeks, only the latest completed week is loaded.
+A successfully checked empty week clears the old drop; a lookup error never
+counts as an empty week. Removing every subscription prepares an empty drop.
+
+The original SD card is required: audio has no internal-storage fallback.
+Keep enough free space for **both** the old drop and the whole replacement.
+Audio goes only to SD `/Podcasts/RockboxManager/<video-id>.mp3`; titles/channel
+names live in tags and the catalog, not filenames. The internal catalog is
+`/.rockbox/podcasts/catalog.tsv`; internal resume records are under
+`/.rockbox/podcasts/resume/`. Manager's music scan excludes this audio, and
+`database.ignore` keeps it out of Rockbox music/database discovery.
+
+Copies are streamed, flushed and hash-checked. The catalog is published last.
+Cancellation, failed downloads, insufficient space, wrong/missing cards, and
+disconnection before publication retain the old catalog/audio. **Retry** resumes
+the PC transfer journal or finishes post-publication cleanup; reconnect the same
+player/card first. Don't delete `%LOCALAPPDATA%\RockboxManager\Podcasts` during
+recovery. Successful cleanup removes obsolete managed files and temporary retry
+backups. Unrelated music, playlist drafts, artwork and scores are preserved.
+Unexpected filename conflicts are retained and reported, rather than overwritten.
+
+On the Clip+, **Podcasts is directly below the Home playlist list**. Open
+**Channels → Episodes**: channels are alphabetical, episodes oldest first.
+Rows show New, Saved plus elapsed time, or Played. Empty channels explain that
+there were no releases. Each episode resumes independently and stops at its
+end; selecting Played starts from zero. Music shuffle/repeat preferences are
+preserved. Resume saves use flushed temporary replacements; failed saves keep
+the previous record and show a warning. Now Playing checkpoints every 30 seconds.
+
+| Button in a managed episode | Action |
+| --- | --- |
+| Right tap | Begin forward scan at 5 seconds/second; repeat taps cycle 10, 15, 5 |
+| Left tap | Backward scan with the same rates; direction changes reset to 5 |
+| Middle during scanning | Commit the shown position and resume |
+| Middle otherwise | Existing pause/resume |
+| Leave Now Playing while scanning | Commit and save the target, remaining paused |
+| Hold Left/Right outside scanning | Existing held-button seek |
+
+Scanning pauses audio, shows direction/rate/time in the artist area, and clamps
+at episode boundaries. Holds during scanning do not cycle rates. Ordinary music
+keeps its existing controls. Current bounded catalog capacity is 32 channels and
+96 weekly episodes; oversized catalogs or unsupported metadata are reported and
+retain the previous drop rather than silently omitting episodes.
+
+Keep the entire portable Manager folder together. Tool versions and archive
+SHA-256 pins are in `tools/podcast-tools.lock.json`; executable hashes are in
+`tools/manifest.json` and checked before use. Licenses are in `tools/licenses`.
+The build script bundles the tools by default; developers can use
+`-SkipPodcastTools` for code-only builds. These tools do not self-update.
 
 ## Listening scores and discovery
 

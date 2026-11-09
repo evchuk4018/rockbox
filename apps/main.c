@@ -94,6 +94,7 @@
 #include "playback.h"
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_autoplay.h"
+#include "podcasts.h"
 #endif
 #include "tdspeed.h"
 #if defined(HAVE_RECORDING) && !defined(SIMULATOR)
@@ -208,6 +209,7 @@ int main(void)
     allocate_playback_log();
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     home_autoplay_init();
+    podcast_init();
 #endif
     if (!file_exists(ROCKBOX_DIR"/playername.txt"))
     {

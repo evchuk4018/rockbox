@@ -108,6 +108,7 @@ public sealed class SyncEngine(IPlayerFiles? files = null)
 
     public SyncResult Execute(SyncBatch batch, Func<PlayerDevice?> discover, IProgress<string>? progress = null)
     {
+        using var transferLease = TransferCoordinator.Enter();
         try
         {
             var device = VerifyDevice(batch, discover());

@@ -83,3 +83,18 @@ public sealed class DeviceDiscovery(string? fixtureRoot = null)
     private static extern bool GetVolumeInformation(string root, StringBuilder? name, int nameSize,
         out uint serial, out uint maxComponent, out uint flags, StringBuilder? fileSystem, int fileSystemSize);
 }
+
+public sealed class DeviceDiscoveryPodcastMountProvider(DeviceDiscovery discovery) : IPodcastMountProvider
+{
+    public PlayerDevice? Recheck(PlayerDevice expected)
+    {
+        var mounted = discovery.Find().FirstOrDefault(device => device.Id == expected.Id);
+        if (mounted is null || mounted.Internal.Id != expected.Internal.Id ||
+            !Path.GetFullPath(mounted.Internal.Root).Equals(Path.GetFullPath(expected.Internal.Root), StringComparison.OrdinalIgnoreCase)) return null;
+        var expectedSd = expected.Sd;
+        var mountedSd = mounted.Sd;
+        if (expectedSd is null || mountedSd is null || mountedSd.Id != expectedSd.Id ||
+            !Path.GetFullPath(mountedSd.Root).Equals(Path.GetFullPath(expectedSd.Root), StringComparison.OrdinalIgnoreCase)) return null;
+        return mounted;
+    }
+}

@@ -148,6 +148,7 @@ static const struct tag_info legal_tags[] =
     TAG(SKIN_TOKEN_HOME_LIKED,            "hL", "", SKIN_REFRESH_DYNAMIC),
     TAG(SKIN_TOKEN_HOME_AUTOPLAY,         "hA", "", SKIN_REFRESH_DYNAMIC),
     TAG(SKIN_TOKEN_HOME_GENRE_PENDING,    "hG", "", SKIN_REFRESH_DYNAMIC),
+    TAG(SKIN_TOKEN_PODCAST_SCAN,          "hP", "", SKIN_REFRESH_DYNAMIC),
     TAG(SKIN_TOKEN_BUTTON_VOLUME,         "mv", "|D", SKIN_REFRESH_DYNAMIC),
 
     TAG(SKIN_TOKEN_PEAKMETER,             "pm", "", SKIN_REFRESH_PEAK_METER),
@@ -341,4 +342,3 @@ const struct tag_info* find_tag(const char *name)
     }
     return tag;
 }
-

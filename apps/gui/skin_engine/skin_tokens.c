@@ -75,6 +75,7 @@
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
 #include "home_autoplay.h"
+#include "podcasts.h"
 #endif
 
 #if (CONFIG_STORAGE & STORAGE_ATA)
@@ -1405,6 +1406,12 @@ const char *get_token_value(struct gui_wps *gwps,
         case SKIN_TOKEN_HOME_GENRE_PENDING:
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
             return home_autoplay_pending_genre();
+#else
+            return NULL;
+#endif
+        case SKIN_TOKEN_PODCAST_SCAN:
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+            return podcast_scan_feedback(buf, buf_size);
 #else
             return NULL;
 #endif

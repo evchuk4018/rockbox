@@ -5,6 +5,7 @@
 #include "home_screen.h"
 #include "music_library.h"
 #include "home_autoplay.h"
+#include "podcasts.h"
 #include "action.h"
 #include "abrepeat.h"
 #include "audio.h"
@@ -89,7 +90,8 @@ static const char *item_name(int item, void *data, char *buf, size_t size)
     item -= song_rows();
     if (item < playlist_count) return music_catalog_label(item, buf, size);
     item -= playlist_count;
-    return str(item == 0 ? LANG_ARTISTS : item == 1 ? LANG_ALBUMS : LANG_SETTINGS);
+    return str(item == 0 ? LANG_PODCASTS : item == 1 ? LANG_ARTISTS :
+               item == 2 ? LANG_ALBUMS : LANG_SETTINGS);
 }
 
 static enum themable_icons item_icon(int item, void *data)
@@ -114,6 +116,8 @@ int home_screen(void)
         refresh_songs();
     if (home_scores_save_failed())
         splash(HZ * 2, ID2P(LANG_HOME_SCORE_SAVE_FAILED));
+    if (podcast_save_failed())
+        splash(HZ * 2, ID2P(LANG_PODCAST_SAVE_FAILED));
 
     int result = GO_TO_ROOT;
     struct gui_synclist list;
@@ -135,7 +139,7 @@ int home_screen(void)
             playlist_count = 0;
             splash(HZ * 2, ID2P(LANG_FAILED));
         }
-        gui_synclist_set_nb_items(&list, song_rows() + playlist_count + 4);
+        gui_synclist_set_nb_items(&list, song_rows() + playlist_count + 5);
         gui_synclist_select_item(&list, MIN(home_selection, list.nb_items - 1));
         FOR_NB_SCREENS(i)
             sb_set_persistent_title(str(LANG_ROCKBOX_TITLE), Icon_Rockbox, i);
@@ -199,10 +203,19 @@ int home_screen(void)
                     }
                     else if (pin >= playlist_count)
                     {
-                        if (pin < playlist_count + 2)
-                            music_library_request(pin == playlist_count ? MUSIC_ARTISTS : MUSIC_ALBUMS, NULL);
-                        else home_in_settings = true;
-                        goto done;
+                        if (pin == playlist_count)
+                        {
+                            result = podcast_screen();
+                            if (result == GO_TO_WPS) goto done;
+                            reload = true;
+                        }
+                        else
+                        {
+                            if (pin < playlist_count + 3)
+                                music_library_request(pin == playlist_count + 1 ? MUSIC_ARTISTS : MUSIC_ALBUMS, NULL);
+                            else home_in_settings = true;
+                            goto done;
+                        }
                     }
                     break;
                 case ACTION_STD_CONTEXT:

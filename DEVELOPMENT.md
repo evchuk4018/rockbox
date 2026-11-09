@@ -13,6 +13,7 @@ README.md for installation and the device test procedure.
 | --- | --- |
 | Main menu and navigation | `apps/root_menu.c`, `apps/menu.c`, `apps/menu.h` |
 | Clip Home and suggestions | `apps/home_screen.c`, `apps/home_data.c`, `apps/home_liked.c`, `apps/home_screen.h` |
+| Managed weekly podcasts | `apps/podcasts.c`, `apps/podcasts.h`, `docs/podcasts-format.md`, `utils/rockbox-manager/Core/Podcast*.cs` |
 | Genre autoplay and persistent listening scores | `apps/home_autoplay.c`, `apps/home_scores.c`, `apps/home_autoplay.h` |
 | Settings and submenus | `apps/menus/`, `apps/settings_list.c`, `apps/settings.c` |
 | Lists, status bar, and layout | `apps/gui/`, including `list.c` and `viewport.c` |
@@ -49,6 +50,15 @@ the song-first Home implementation is independent of that demonstration.
 ## Checks and boundaries
 
 ### Home checks
+
+Run `python tools/windows-simulator/tests/test-podcasts.py` for the production
+podcast catalog, resume persistence/faults, playback-event and scan-control
+harness. The Clip skin's `%hP` token shows scan direction, rate and target time
+without blocking the WPS loop; its existing progress offset displays the target.
+`utils/rockbox-manager/build.ps1` bundles pinned portable podcast tools; pins and
+notices are beside its source. `--podcast-smoke <PC-report.json>` runs the
+published Manager's 19-second public-video download/transcode/hash/transfer/repeat
+check against isolated PC fixtures, leaving subscriptions and USB devices alone.
 
 Run the focused host checks with:
 

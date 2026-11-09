@@ -125,10 +125,10 @@ static char requested_path[MAX_PATH];
 static int catalog_handle,catalog_count;
 static char catalog_dir[MAX_PATH],*catalog_base;
 const char *music_catalog_path(int);
-enum {LANG_PLAY_NEXT,LANG_MUSIC_ADD_QUEUE,LANG_ADD_TO_PL,LANG_MUSIC_UNLIKE,LANG_MUSIC_LIKE,LANG_MUSIC_GO_ARTIST,LANG_MUSIC_GO_ALBUM,LANG_MUSIC_MORE,LANG_ONPLAY_MENU_TITLE,LANG_FILE_NOT_FOUND,LANG_FAILED,LANG_PLAYLIST_ADDED,LANG_HOME_LIKE_FAILED,LANG_MUSIC_ALL_SONGS,LANG_SEARCH,LANG_MUSIC_NO_MATCHES,LANG_HOME_DATABASE,LANG_WAIT,LANG_ARTISTS,LANG_ALBUMS};
-static const char *labels[]={"Play next","Add to queue","Add to playlist","Unlike","Like","Go to artist","Go to album","More...","Song","Missing","Failed","Added","Like failed","All songs","Search","No matches","Database required","Wait","Artists","Albums","No liked songs","Settings"};
-#define LANG_HOME_NO_LIKED 20
-#define LANG_SETTINGS 21
+enum {LANG_PLAY_NEXT,LANG_MUSIC_ADD_QUEUE,LANG_ADD_TO_PL,LANG_MUSIC_UNLIKE,LANG_MUSIC_LIKE,LANG_MUSIC_GO_ARTIST,LANG_MUSIC_GO_ALBUM,LANG_MUSIC_MORE,LANG_ONPLAY_MENU_TITLE,LANG_FILE_NOT_FOUND,LANG_FAILED,LANG_PLAYLIST_ADDED,LANG_HOME_LIKE_FAILED,LANG_MUSIC_ALL_SONGS,LANG_SEARCH,LANG_MUSIC_NO_MATCHES,LANG_HOME_DATABASE,LANG_WAIT,LANG_ARTISTS,LANG_ALBUMS,LANG_PODCASTS};
+static const char *labels[]={"Play next","Add to queue","Add to playlist","Unlike","Like","Go to artist","Go to album","More...","Song","Missing","Failed","Added","Like failed","All songs","Search","No matches","Database required","Wait","Artists","Albums","Podcasts","No liked songs","Settings"};
+#define LANG_HOME_NO_LIKED 21
+#define LANG_SETTINGS 22
 enum themable_icons {Icon_Audio=1,Icon_Submenu_Entered,Icon_Playlist};
 static struct {int count;struct {char label[MAX_PATH*2];} songs[3];} picks;
 static int playlist_count;
@@ -136,6 +136,7 @@ static int playlist_count;
 #define ID2P(x) labels[x]
 enum { ONPLAY_MAINMENU=-1,ONPLAY_OK=0,ONPLAY_START_PLAY=1,ONPLAY_PLUGIN=2,ONPLAY_REVEAL_FILE=3,ONPLAY_NO_CUSTOMACTION=0,MUSIC_MENU_MORE=-100 };
 enum {GO_TO_ROOT=-1,GO_TO_WPS=2,ACTION_TREE_WPS=50,AUDIO_STATUS_PLAY=1,AUDIO_STATUS_PAUSE=2};
+int podcast_screen(void) { return GO_TO_ROOT; }
 enum { PLAYLIST_INSERT_FIRST=-1,PLAYLIST_INSERT_LAST=-2 };
 enum {MT_RETURN_ID=5,MENU_HAS_DESC=16,MENU_ATTACHED_USB=-10};
 #define MENU_ITEM_COUNT(n) ((n)<<12)
@@ -237,9 +238,10 @@ int main(void) {
     assert(!strcmp(item_name(1,NULL,name,sizeof(name)),"No liked songs"));
     picks.count=3;strcpy(picks.songs[0].label,"Suggestion");
     assert(!strcmp(item_name(1,NULL,name,sizeof(name)),"Suggestion"));
-    assert(!strcmp(item_name(4,NULL,name,sizeof(name)),"Artists"));
-    assert(!strcmp(item_name(5,NULL,name,sizeof(name)),"Albums"));
-    assert(!strcmp(item_name(6,NULL,name,sizeof(name)),"Settings"));
+    assert(!strcmp(item_name(4,NULL,name,sizeof(name)),"Podcasts"));
+    assert(!strcmp(item_name(5,NULL,name,sizeof(name)),"Artists"));
+    assert(!strcmp(item_name(6,NULL,name,sizeof(name)),"Albums"));
+    assert(!strcmp(item_name(7,NULL,name,sizeof(name)),"Settings"));
     playlist_count=catalog_count;
     assert(item_icon(0,NULL)==Icon_Submenu_Entered&&item_icon(1,NULL)==Icon_Audio);
     assert(item_icon(4,NULL)==Icon_Playlist);

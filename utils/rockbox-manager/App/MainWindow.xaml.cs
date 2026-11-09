@@ -28,6 +28,10 @@ public partial class MainWindow : Window
     private CancellationTokenSource? discoveryCancellation;
     private Dictionary<SongPath, ArtworkResult> artwork = [];
     private CancellationTokenSource? artworkCancellation;
+    private readonly PodcastManager podcastManager;
+    private CancellationTokenSource? podcastCancellation;
+    private bool podcastBusy, showingPodcasts;
+    private PodcastWeek? requestedPodcastWeek;
     private bool preparingArtwork;
     private Dictionary<SongPath, Track> trackIndex = [];
     private ICollectionView? rows;
@@ -43,14 +47,20 @@ public partial class MainWindow : Window
     public MainWindow(DeviceDiscovery discovery)
     {
         this.discovery = discovery;
+        var podcastRoot = Path.Combine(App.DataRoot, "Podcasts");
+        var podcastTools = PortableToolPaths.BesideExecutable();
+        podcastManager = new PodcastManager(podcastRoot, new YtDlpPodcastSource(podcastTools),
+            new PodcastMediaPreparer(podcastTools, new PodcastCache(Path.Combine(podcastRoot, "cache"))),
+            new DeviceDiscoveryPodcastMountProvider(discovery));
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
             var dark = 1;
             _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, sizeof(int));
         };
-        Loaded += async (_, _) => { timer.Start(); await Poll(); };
+        Loaded += async (_, _) => { timer.Start(); await Poll(); await PreparePodcastsAsync(transferIfConnected: true); };
         timer.Tick += async (_, _) => await Poll();
+        RefreshPodcastUi();
     }
 
     private async Task Poll()
@@ -89,6 +99,7 @@ public partial class MainWindow : Window
                             found.Sd is null ? "Internal storage connected. Reconnect the original SD card to send mirrored playlist edits." :
                             "Player reconnected. Your pending changes are ready to send.";
                         UpdateChrome();
+                        if (found is not null) _ = PreparePodcastsAsync(transferIfConnected: true);
                     }
                 }
             }
@@ -100,6 +111,8 @@ public partial class MainWindow : Window
             UpdateChrome();
         }
         finally { polling = false; }
+        if (requestedPodcastWeek != podcastManager.CurrentWeek)
+            _ = PreparePodcastsAsync(transferIfConnected: connected is not null);
     }
 
     private static string ConnectionKey(PlayerDevice? device) => device is null ? "" :
@@ -161,6 +174,7 @@ public partial class MainWindow : Window
         }
         finally { busy = false; if (!closed) UpdateChrome(); }
         if (!closed && session?.PendingBatch is null && connected is not null) _ = PrepareArtwork();
+        if (!closed && connected is not null) _ = PreparePodcastsAsync(transferIfConnected: true);
     }
 
     private void RefreshNavigation(string? selectKey = null)
@@ -188,6 +202,7 @@ public partial class MainWindow : Window
     private void NavigationChanged(object sender, SelectionChangedEventArgs e)
     {
         if (navigating || Navigation.SelectedItem is not NavItem nav) return;
+        showingPodcasts = false; PodcastPanel.Visibility = Visibility.Collapsed;
         currentKey = nav.Key;
         SearchBox.Text = ""; StorageFilter.SelectedIndex = 0;
         GenreFilter.SelectedIndex = 0;
@@ -214,6 +229,7 @@ public partial class MainWindow : Window
     private void ShowView()
     {
         if (session is null) return;
+        if (showingPodcasts) return;
         var discover = currentKey == "discover";
         DiscoveryPanel.Visibility = discover ? Visibility.Visible : Visibility.Collapsed;
         Editor.Visibility = discover ? Visibility.Collapsed : Visibility.Visible;
@@ -242,6 +258,27 @@ public partial class MainWindow : Window
             Songs.ItemsSource = rows;
         UpdateRowCount();
         UpdateChrome();
+    }
+
+    private void PodcastsClick(object sender, RoutedEventArgs e)
+    {
+        showingPodcasts = !showingPodcasts;
+        if (showingPodcasts)
+        {
+            Editor.Visibility = DiscoveryPanel.Visibility = ConnectionPanel.Visibility = Visibility.Collapsed;
+            PodcastPanel.Visibility = Visibility.Visible;
+            RefreshPodcastUi();
+        }
+        else if (session is not null)
+        {
+            PodcastPanel.Visibility = Visibility.Collapsed;
+            ShowView();
+        }
+        else
+        {
+            PodcastPanel.Visibility = Visibility.Collapsed;
+            ConnectionPanel.Visibility = Visibility.Visible;
+        }
     }
     private bool RowMatches(object obj)
     {
@@ -369,6 +406,104 @@ public partial class MainWindow : Window
         }
     }
     private async void ArtworkRetryClick(object sender, RoutedEventArgs e) { if (!busy && !preparingArtwork) await PrepareArtwork(retry: true); }
+
+    private void RefreshPodcastUi()
+    {
+        if (PodcastSubscriptions is null) return;
+        PodcastSubscriptions.ItemsSource = podcastManager.Subscriptions.Subscriptions.ToList();
+        var prepared = podcastManager.Prepared;
+        PodcastWeekLabel.Text = $"Latest completed America/New_York week: {podcastManager.CurrentWeek.Label}";
+        PodcastCount.Text = prepared?.Catalog is { } catalog
+            ? $"{catalog.Episodes.Count:N0} episode{(catalog.Episodes.Count == 1 ? "" : "s")}"
+            : "No prepared drop";
+        PodcastEpisodes.ItemsSource = prepared?.Catalog?.Episodes.Select(e => new PodcastRow(e)).ToList() ?? [];
+        if (prepared is not null && !podcastBusy) PodcastStatus.Text = prepared.Status;
+        PodcastCancel.IsEnabled = podcastBusy;
+        PodcastRetry.IsEnabled = !podcastBusy;
+    }
+
+    private async Task PreparePodcastsAsync(bool transferIfConnected)
+    {
+        if (podcastBusy || closed) return;
+        podcastBusy = true;
+        requestedPodcastWeek = podcastManager.CurrentWeek;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+        podcastCancellation = operation;
+        PodcastRetry.IsEnabled = false; PodcastCancel.IsEnabled = true;
+        var progress = new Progress<PodcastProgress>(value =>
+        {
+            PodcastStatus.Text = value.Message;
+            PodcastProgress.IsIndeterminate = value.Indeterminate || value.Total == 0;
+            PodcastProgress.Maximum = Math.Max(1, value.Total);
+            PodcastProgress.Value = Math.Min(value.Completed, PodcastProgress.Maximum);
+        });
+        try
+        {
+            var result = await Task.Run(() => podcastManager.PrepareAsync(operation.Token, progress), operation.Token);
+            if (result.Success && transferIfConnected && connected is not null)
+                await PublishPodcastsAsync(connected, operation.Token, progress);
+            else if (!result.Success)
+            {
+                var podcastRoot = Path.Combine(App.DataRoot, "Podcasts");
+                if (transferIfConnected && connected is not null && PodcastTransferService.HasPendingTransfer(podcastRoot))
+                    await PublishPodcastsAsync(connected, operation.Token, progress);
+                else PodcastStatus.Text = result.Status;
+            }
+        }
+        catch (OperationCanceledException) { PodcastStatus.Text = "Podcast preparation canceled. Retry when ready."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PodcastSourceException)
+        { PodcastStatus.Text = "Podcast preparation failed: " + ex.Message; }
+        finally
+        {
+            if (podcastCancellation == operation) podcastCancellation = null;
+            var status = PodcastStatus.Text;
+            podcastBusy = false; RefreshPodcastUi(); PodcastStatus.Text = status; UpdateChrome();
+        }
+    }
+
+    private async Task PublishPodcastsAsync(PlayerDevice device, CancellationToken cancellation, IProgress<PodcastProgress> progress)
+    {
+        PodcastStatus.Text = "Sending prepared podcasts…";
+        var result = await Task.Run(() => podcastManager.PublishIfDueAsync(device, cancellation, progress), cancellation);
+        PodcastStatus.Text = result.Message;
+        if (!result.Success) ShowError(result.Message);
+    }
+
+    private async void PodcastPrepareClick(object sender, RoutedEventArgs e) => await PreparePodcastsAsync(transferIfConnected: true);
+
+    private async void PodcastAddClick(object sender, RoutedEventArgs e)
+    {
+        if (podcastBusy) return;
+        podcastBusy = true; PodcastCancel.IsEnabled = true;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+        podcastCancellation = operation;
+        var added = false;
+        try
+        {
+            PodcastStatus.Text = "Checking public channel…";
+            await podcastManager.AddAsync(PodcastUrl.Text, operation.Token, new Progress<PodcastProgress>(p => PodcastStatus.Text = p.Message));
+            added = true; PodcastUrl.Text = ""; RefreshPodcastUi();
+        }
+        catch (OperationCanceledException) { PodcastStatus.Text = "Adding channel canceled."; }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or PodcastSourceException)
+        { PodcastStatus.Text = "Could not add channel: " + ex.Message; }
+        finally
+        {
+            podcastCancellation = null; podcastBusy = false; RefreshPodcastUi();
+        }
+        if (added) await PreparePodcastsAsync(transferIfConnected: true);
+    }
+
+    private async void PodcastRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (podcastBusy || (sender as FrameworkElement)?.DataContext is not PodcastSubscription subscription) return;
+        podcastManager.Remove(subscription.ChannelId); RefreshPodcastUi();
+        await PreparePodcastsAsync(transferIfConnected: true);
+    }
+
+    private void PodcastCancelClick(object sender, RoutedEventArgs e) => podcastCancellation?.Cancel();
+    private async void PodcastRetryClick(object sender, RoutedEventArgs e) => await PreparePodcastsAsync(transferIfConnected: true);
+
     private void UpdateRowCount()
     {
         if (rows is null) return;
@@ -560,10 +695,17 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, text, "Unsent changes", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             { e.Cancel = true; return; }
         }
-        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel(); discoveryCancellation?.Cancel();
+        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel(); discoveryCancellation?.Cancel(); podcastCancellation?.Cancel();
     }
     private sealed record CatalogItem(string Key, string Label);
     private sealed record NavItem(string Key, string Label, string Caption);
+    private sealed record PodcastRow(PodcastEpisode Episode)
+    {
+        public string Title => Episode.Title;
+        public string ChannelName => Episode.ChannelName;
+        public string PublishedLabel => Episode.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm zzz");
+        public string DurationLabel => Episode.Duration == TimeSpan.Zero ? "—" : Episode.Duration.ToString(Episode.Duration.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
+    }
     private sealed record TrackRow(int Index, Track Track, bool Liked, double Points)
     {
         public int Number => Index + 1;

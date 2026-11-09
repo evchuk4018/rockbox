@@ -22,6 +22,7 @@ public static class PlayerLibrary
                 cancellation.ThrowIfCancellationRequested();
                 var relative = Path.GetRelativePath(volume.Root, file).Replace('\\', '/');
                 if (relative.StartsWith(".rockbox/", StringComparison.OrdinalIgnoreCase) ||
+                    relative.StartsWith("Podcasts/RockboxManager/", StringComparison.OrdinalIgnoreCase) ||
                     !AudioExtensions.Contains(Path.GetExtension(file))) continue;
                 var title = Path.GetFileNameWithoutExtension(file);
                 string artist = "", album = "", genre = "", albumArtist = "";

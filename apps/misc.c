@@ -59,6 +59,9 @@
 #include "tagcache.h"
 #include "sound.h"
 #include "playlist.h"
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+#include "podcasts.h"
+#endif
 #include "yesno.h"
 #include "viewport.h"
 #include "list.h"
@@ -344,6 +347,9 @@ bool settings_parseline(char* line, char** name, char** value)
 
 static void system_flush(void)
 {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    podcast_wps_pause_save();
+#endif
     playlist_shutdown();
     tree_flush();
     open_plugin_cache_flush();
@@ -431,6 +437,10 @@ static bool clean_shutdown(enum shutdown_type sd_type,
 #endif
             bookmark_autobookmark(false);
 
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+            podcast_wps_pause_save();
+#endif
+
             /* audio_stop_recording == audio_stop for HWCODEC */
             audio_stop();
 
@@ -487,6 +497,9 @@ bool list_stop_handler(void)
         if (!global_settings.party_mode)
         {
             bookmark_autobookmark(true);
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+            podcast_wps_pause_save();
+#endif
             audio_stop();
             ret = true;  /* bookmarking can make a refresh necessary */
         }

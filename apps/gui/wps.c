@@ -23,6 +23,7 @@
 #include "config.h"
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "home_screen.h"
+#include "podcasts.h"
 #include "playlist_catalog.h"
 #include "string-extra.h"
 #endif
@@ -157,6 +158,9 @@ void wps_do_action(enum wps_do_action_type action, bool updatewps)
             call_storage_idle_notifys(true);   /* make sure resume info is saved */
     #endif
         }
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+        podcast_wps_pause_save();
+#endif
     }
 
     /* Bugfix only do a skin refresh if in one of the below screens */
@@ -544,6 +548,9 @@ static void wps_lcd_activation_hook(unsigned short id, void *param)
 
 static void gwps_leave_wps(bool theme_enabled)
 {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    podcast_wps_exit();
+#endif
     FOR_NB_SCREENS(i)
     {
         struct gui_wps *gwps = skin_get_gwps(WPS, i);
@@ -633,6 +640,9 @@ static void gwps_enter_wps(bool theme_enabled)
 
 static long do_wps_exit(long action, bool bookmark)
 {
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+    podcast_wps_exit();
+#endif
     audio_pause();
     update_non_static();
     if (bookmark)
@@ -811,6 +821,9 @@ long gui_wps_show(void)
            playlist or if using the sleep timer. */
         if (!(audio_status() & AUDIO_STATUS_PLAY))
             exit = true;
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+        podcast_wps_checkpoint();
+#endif
 #ifdef HAVE_TOUCHSCREEN
         if (button == ACTION_TOUCHSCREEN)
             button = skintouch_to_wps();
@@ -818,6 +831,14 @@ long gui_wps_show(void)
         button = do_party_mode(button); /* block select actions in party mode */
 
         button = action_wpsab_single(button); /* iPods/X5/M5 */
+
+#if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
+        if (podcast_wps_action(button))
+        {
+            update = true;
+            continue;
+        }
+#endif
 
         switch(button)
         {
