@@ -51,6 +51,22 @@ the song-first Home implementation is independent of that demonstration.
 
 ### Home checks
 
+Run `python tools/windows-simulator/tests/test-crashlog.py` for persistent Clip+
+panic/abort recording. `.rockbox/crashlog.txt` holds two 512-byte records; the
+newer valid checksum wins. Startup pins two read handles so deleting/renaming the
+file cannot recycle its clusters while armed. Panic and abort handlers perform a
+bounded polled single-sector write to the file's mapped FAT sectors on initialized
+internal storage only. They never use the scheduler, locks, DMA, the removable SD
+card, or mutable FAT metadata. The panic screen shows `Crash log: saved` or
+`not saved`; no crash is cleared automatically on restart. USB, hotswap and
+shutdown call `crashlog_disarm()` first, then USB/hotswap re-arm in normal context.
+Early boot and panics during an active storage transfer are intentionally not
+writable and report `not saved`. Host checks cover fragmented files, fixed
+allocation, restart sequence selection, torn writes, nested faults, USB/IO
+failures, FAT mapping and the polled controller state machine. A successful
+record includes build, kind, message, PC, SP, FSR, FAR and tick; inspect or copy
+`.rockbox/crashlog.txt` after reconnecting. Do not delete it before diagnosis.
+
 Run `python tools/windows-simulator/tests/test-podcasts.py` for the production
 podcast catalog, resume persistence/faults, playback-event and scan-control
 harness. The Clip skin's `%hP` token shows scan direction, rate and target time

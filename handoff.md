@@ -1,5 +1,41 @@
 # Rockbox Manager and Clip+ handoff
 
+## Boot crash reported and player recovered — November 9, 2026
+
+After the firmware update and SD dirty-flag repair, the user reported a crash on
+boot, followed by a dark/unresponsive player. Windows initially detected only
+SanDisk USB `0781:6200` with Device Manager error 10 and neither storage volume.
+The user performed a 30-second Power reset with USB disconnected, then held Left
+while reconnecting. The player showed the SanDisk firmware-update message and
+subsequently booted Rockbox; both original storage volumes are accessible again.
+
+Read-only inspection checked all **341 installed firmware files** against their
+installation SHA-256 hashes: all match **796b6a80e3-261109**. Both volumes report
+Healthy / OK and NOT Dirty. A full file-name scan found only `.rockbox/rbutil.log`,
+the installation history, and no saved panic/crash log. `.rockbox/debug` contains
+the symbol map only. `FOUND.000/FILE0000.CHK` contains an old Home autoplay pool;
+its hash matches the pre-install snapshot, so it is not evidence of this crash.
+
+The current panic handler displays panic/backtrace information on the LCD rather
+than saving a persistent crash dump. The cause remains **undetermined** after the
+reset. Capture the exact on-screen panic/abort text and what the player was doing
+if it recurs; hardware playback stability is not yet established. The player
+still runs the podcast build, not a rollback. Read-only evidence and copied state
+files: `C:/RockboxDev/logs/crash-inspection-20261109/inspection.json` and `evidence/`.
+
+**Persistent crash logging added:** Panics and ARM aborts now save a checksummed
+record to internal `/.rockbox/crashlog.txt` before the error screen, which reports
+whether the save succeeded. Two preallocated 512-byte records alternate; the newest
+valid record survives a restart. The emergency path performs one bounded polled
+write to the file's mapped internal sectors without scheduler, locks, DMA, the
+removable card, or FAT metadata changes. Startup pins two handles to prevent
+cluster recycling. Logging is disarmed for USB/hotswap/shutdown (rearmed after USB),
+and is unavailable before mount or during an active disk transfer; those attempts
+report **not saved**. Host regression checks cover mapping, fragmentation, sequence
+selection, torn writes, nested faults, I/O/controller failures and USB exclusion.
+Source commit `fd26078a5a`; firmware built on the homelab with two jobs.
+
+
 ## Weekly YouTube podcasts installed — November 9, 2026
 
 Installed **796b6a80e3-261109** on the identified Clip+ (internal volume serial
@@ -45,9 +81,16 @@ Evidence/backups: `C:/RockboxDev/logs/podcasts-20261109/`, including
 logs and `manager-smoke.json`. Source/artifacts are also staged at
 `/home/evanh/rockbox-podcasts-20261109` on homelab.
 
-**Before podcast transfers:** Windows reports SD volume E: dirty / Full Repair
-Needed. The firmware update wrote internal storage only and preserved the card.
-Resolve that existing filesystem warning before using podcast sync.
+**SD warning resolved November 9:** Ran elevated `chkdsk E: /F /X` on the
+verified card (serial 11F13253). Both the initial and post-repair filesystem
+scans found no file/folder problems; repair cleared the dirty flag. Windows now
+reports **Healthy / OK**, and `fsutil dirty query E:` reports **NOT Dirty**.
+All 2,089 inventoried files are preserved: all 785 audio files retain their sizes
+and timestamps, and all 1,304 non-audio files retain their SHA-256 hashes.
+Pre-repair inventory, a 14,777,344-byte FAT32 boot/allocation-table backup,
+CHKDSK logs and `verify-result.json` are under
+`C:/RockboxDev/logs/sd-repair-20261109/`. The repair did not alter firmware or
+initialize a podcast drop. The earlier SD warning no longer blocks podcast sync.
 Safely eject **both volumes**, disconnect USB and restart to load the firmware.
 Physical display, buttons, scanning feel and audio acceptance remain user checks.
 No music database rebuild is required.

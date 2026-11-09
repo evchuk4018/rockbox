@@ -28,6 +28,17 @@ No music database rebuild is needed. An SD card is required for podcast audio;
 there is no internal fallback. Resolve filesystem repair warnings before podcast
 transfers. Physical display, buttons and audio acceptance are user checks.
 
+### Crash log
+
+If Rockbox panics or an ARM abort occurs, it now saves details to
+`/.rockbox/crashlog.txt` on internal storage before showing the error screen.
+The screen reports **Crash log: saved** or **not saved**. Two preallocated records
+take turns so the previous crash survives; a valid checksum identifies the newest.
+Keep the file and send its exact text when reporting a crash. It records build,
+panic message, PC/SP, fault status/address and uptime; backtraces remain on-screen.
+Logging is disabled while USB storage is active and during an active disk transfer,
+and cannot run before storage mounts. Those cases report **not saved**.
+
 ## Weekly behavior and recovery
 
 The requested drop is the previous Monday–Sunday in America/New_York. Successful
