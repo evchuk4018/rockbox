@@ -52,9 +52,9 @@ public sealed class PodcastTransferService
             {
                 if (journal.DeviceId != device.Id || journal.InternalId != device.Internal.Id || journal.SdId != sd.Id)
                     throw new IOException("A podcast transfer is pending for a different player or SD card.");
-                if (journal.Revision != revision) throw new IOException("A previous podcast transfer is pending. Retry it before preparing a new drop.");
-                ValidateJournalPaths(journal, device, catalog);
-                activeJournal = journal;
+                if (!PodcastCatalogCodec.TryParse(Convert.FromBase64String(journal.CatalogBase64), out var pendingCatalog, out _))
+                    throw new InvalidOperationException("The pending podcast catalog is invalid.");
+                RebaseJournal(journal, device, pendingCatalog!);
 
                 var catalogPath = CatalogPath(device.Internal);
                 if (!journal.Published && CatalogMatches(catalogPath, journal.CatalogBase64))
@@ -62,7 +62,29 @@ public sealed class PodcastTransferService
                     journal.Published = true;
                     SaveJournal(journal);
                 }
-                if (journal.Published) return await FinishPublishedAsync(device, catalog, journal, cancellation, progress);
+                if (journal.Revision != revision)
+                {
+                    if (journal.Published)
+                    {
+                        await FinishPublishedAsync(device, pendingCatalog!, journal, cancellation, progress);
+                        if (File.Exists(journalPath)) throw new IOException("Finish the previous drop's pending cleanup before replacing it.");
+                    }
+                    else
+                    {
+                        Restore(journal);
+                        if (journal.Audio.Any(a => a.Replaced)) throw new IOException("The previous interrupted drop could not be recovered.");
+                        DeleteOwnedDirectory(journal.StageRoot, root);
+                        DeleteOwnedDirectory(journal.BackupRoot, root);
+                        File.Delete(journalPath);
+                    }
+                    journal = null;
+                    state = LoadStates().FirstOrDefault(s => s.DeviceId == device.Id);
+                }
+                else
+                {
+                    activeJournal = journal;
+                    if (journal.Published) return await FinishPublishedAsync(device, catalog, journal, cancellation, progress);
+                }
             }
 
             var catalogBytes = PodcastCatalogCodec.Write(catalog);
@@ -327,6 +349,22 @@ public sealed class PodcastTransferService
         }
         if (journal.CleanupPaths.Any(path => !IsOwnedCleanupPath(device.Internal.Root, sd.Root, path)))
             throw new InvalidOperationException("The pending podcast journal has an invalid cleanup path.");
+    }
+
+    private void RebaseJournal(PodcastTransferJournal journal, PlayerDevice device, PodcastCatalog catalog)
+    {
+        var prior = device with { Internal = device.Internal with { Root = journal.InternalRoot },
+            Sd = device.Sd! with { Root = journal.SdRoot } };
+        ValidateJournalPaths(journal, prior, catalog);
+        journal.CleanupPaths = journal.CleanupPaths.Select(path =>
+            IsDirectManagedPath(journal.SdRoot, path, "Podcasts/RockboxManager", ".mp3")
+                ? Path.Combine(device.Sd!.Root, Path.GetRelativePath(journal.SdRoot, path))
+                : Path.Combine(device.Internal.Root, Path.GetRelativePath(journal.InternalRoot, path))).ToList();
+        foreach (var audio in journal.Audio) audio.DestinationPath = AudioPath(device.Sd!, audio.VideoId);
+        journal.InternalRoot = device.Internal.Root;
+        journal.SdRoot = device.Sd!.Root;
+        ValidateJournalPaths(journal, device, catalog);
+        SaveJournal(journal);
     }
 
     private void BackupIfNeeded(PodcastTransferJournal journal, string source, string backup)

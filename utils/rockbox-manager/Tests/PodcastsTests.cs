@@ -415,6 +415,39 @@ static class PodcastsTests
             check(!sent.Success && !File.Exists(fixture.InternalCatalogPath) && File.ReadAllText(fixture.AudioPath) == "unowned audio");
         });
 
+        test("Pending transfers follow verified identities when drive roots change", () =>
+        {
+            using var fixture = new PodcastTransferFixture();
+            var episode = new PodcastEpisode("video_1", "UC_feed", "Feed", "Episode", DateTimeOffset.UtcNow, TimeSpan.FromSeconds(10));
+            var catalog = new PodcastCatalog(PodcastWeek.PreviousCompleted(DateTimeOffset.UtcNow), [new("UC_feed", "Feed")], [episode]);
+            var cache = fixture.WriteCache(episode, [1, 2, 3]);
+            var prepared = new PodcastPreparedEpisode(episode, cache, FileSnapshot.Digest(File.ReadAllBytes(cache)), 3);
+            check(!new PodcastTransferService(fixture.DataRoot, new ThrowOnPodcastReplace("video_1"))
+                .PublishAsync(fixture.Device, catalog, [prepared]).GetAwaiter().GetResult().Success);
+            var internalRoot = fixture.Device.Internal.Root + "-remounted";
+            var sdRoot = fixture.Device.Sd!.Root + "-remounted";
+            Directory.Move(fixture.Device.Internal.Root, internalRoot); Directory.Move(fixture.Device.Sd.Root, sdRoot);
+            var remounted = fixture.Device with { Internal = fixture.Device.Internal with { Root = internalRoot }, Sd = fixture.Device.Sd with { Root = sdRoot } };
+            check(new PodcastTransferService(fixture.DataRoot).PublishAsync(remounted, catalog, [prepared]).GetAwaiter().GetResult().Success);
+            check(File.Exists(Path.Combine(internalRoot, ".rockbox/podcasts/catalog.tsv")));
+        });
+
+        test("A new completed week supersedes an unpublished interrupted drop", () =>
+        {
+            using var fixture = new PodcastTransferFixture();
+            var episode = new PodcastEpisode("video_1", "UC_feed", "Feed", "Episode", DateTimeOffset.UtcNow, TimeSpan.FromSeconds(10));
+            var week = PodcastWeek.PreviousCompleted(DateTimeOffset.UtcNow);
+            var catalog = new PodcastCatalog(week, [new("UC_feed", "Feed")], [episode]);
+            var cache = fixture.WriteCache(episode, [1, 2, 3]);
+            var prepared = new PodcastPreparedEpisode(episode, cache, FileSnapshot.Digest(File.ReadAllBytes(cache)), 3);
+            check(!new PodcastTransferService(fixture.DataRoot, new ThrowOnPodcastReplace("catalog.tsv"))
+                .PublishAsync(fixture.Device, catalog, [prepared]).GetAwaiter().GetResult().Success);
+            var next = new PodcastCatalog(new(week.Monday.AddDays(21), week.Sunday.AddDays(21)), [new("UC_feed", "Feed")], []);
+            var sent = new PodcastTransferService(fixture.DataRoot).PublishAsync(fixture.Device, next, []).GetAwaiter().GetResult();
+            check(sent.Success && !File.Exists(fixture.AudioPath));
+            check(PodcastCatalogCodec.TryParse(File.ReadAllBytes(fixture.InternalCatalogPath), out var installed, out _) && installed!.Week == next.Week);
+        });
+
         test("Podcast cache pruning keeps only current, prepared, and pending IDs", () =>
         {
             using var temp = new PodcastTemp();

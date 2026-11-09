@@ -121,9 +121,14 @@ public sealed class PodcastManager
     public async Task<PodcastTransferResult> PublishIfDueAsync(PlayerDevice device, CancellationToken cancellation = default,
         IProgress<PodcastProgress>? progress = null)
     {
-        if (PodcastTransferService.TryLoadPending(root, out var pendingCatalog) && pendingCatalog is not null)
-            return await new PodcastTransferService(root, mounts: mounts).PublishAsync(device, pendingCatalog, [], cancellation, progress);
         var result = prepared ?? LoadPrepared();
+        if (result is null || !result.Success || result.Catalog is null)
+        {
+            if (PodcastTransferService.TryLoadPending(root, out var pendingCatalog) && pendingCatalog is not null &&
+                pendingCatalog.Week == CurrentWeek && pendingCatalog.Channels.Select(c => c.Id).Order(StringComparer.Ordinal)
+                    .SequenceEqual(subscriptions.Subscriptions.Select(s => s.ChannelId).Order(StringComparer.Ordinal)))
+                return await new PodcastTransferService(root, mounts: mounts).PublishAsync(device, pendingCatalog, [], cancellation, progress);
+        }
         if (result is null || !result.Success || result.Catalog is null) return new(false, false, "Prepare podcasts before connecting a player.", 0, 0);
         if (result.Catalog.Week != CurrentWeek || preparedSubscriptions != SubscriptionRevision())
             return new(false, false, "The prepared drop is outdated. Prepare the latest completed week before sending.", 0, 0);

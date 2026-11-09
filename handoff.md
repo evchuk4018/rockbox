@@ -1,5 +1,57 @@
 # Rockbox Manager and Clip+ handoff
 
+## Weekly YouTube podcasts installed — November 9, 2026
+
+Installed **796b6a80e3-261109** on the identified Clip+ (internal volume serial
+506F1958; SD serial 11F13253). All **341 firmware files** passed SHA-256 read-back
+verification. All **1,407 protected files** match the before snapshot; all **785
+music files** retain their sizes and modification times. No podcast subscription
+was added and no audio/card content was transferred during firmware deployment.
+
+Portable Manager: `C:/RockboxDev/rockbox/build-rockbox-manager/RockboxManager.exe`.
+Publishable packages, installation guide and checksums are under
+`C:/RockboxDev/logs/podcasts-20261109/release/`. Release:
+https://github.com/evchuk4018/rockbox/releases/tag/podcasts-2026-11-09
+Use the entire Manager ZIP, including the pinned/checksummed yt-dlp, Deno, FFmpeg
+and ffprobe tools and notices. Initial subscriptions are empty. Open Podcasts
+from the top bar to add channels, including while disconnected.
+
+Manager prepares the latest completed America/New_York Monday–Sunday week and
+automatically transfers while running. A successful drop replaces the entire old
+one, including unfinished episodes; same-week reconnects retain it and positions.
+Subscription changes replace that week's drop. Missed weeks load only the latest
+completed week. A checked empty week clears the old drop; source failures do not.
+The original SD card and room for old plus new audio are required. Retry preserves
+completed preparation and uses a durable transfer journal; catalog publication is
+the commit point. Catalog/resume data are internal; audio is SD-only and excluded
+from music scans/database. Unrelated drafts, music, artwork and scores are preserved.
+
+Player: Home Podcasts is below playlists, then alphabetic Channels → oldest-first
+Episodes. New/Saved-time/Played labels, independent resume and single-track stop.
+Right/Left taps start scanning at 5 seconds/second, cycling 10/15/5; direction
+changes reset to 5. Middle commits/resumes; leaving WPS commits/saves while paused.
+Held seeking and ordinary music controls remain. See the Manager guide and
+`docs/podcasts-install.md` for complete use, recovery, limits and controls.
+
+Validation: **88/88 Manager regressions** on Windows; Linux Manager checks;
+production native Podcasts, nine Home, two music-library and three metadata
+tests; Windows simulator and homelab ARM firmware build (two jobs). The published
+Windows Manager completed a live 19-second public-video download/transcode and
+isolated verified transfer, with a zero-write repeat. ffprobe confirmed MP3,
+two channels, 128000 bit/s and channel/title tags. No browser/UI automation used.
+
+Evidence/backups: `C:/RockboxDev/logs/podcasts-20261109/`, including
+`installation/device-before/.rockbox`, `installation/verification.json`, build
+logs and `manager-smoke.json`. Source/artifacts are also staged at
+`/home/evanh/rockbox-podcasts-20261109` on homelab.
+
+**Before podcast transfers:** Windows reports SD volume E: dirty / Full Repair
+Needed. The firmware update wrote internal storage only and preserved the card.
+Resolve that existing filesystem warning before using podcast sync.
+Safely eject **both volumes**, disconnect USB and restart to load the firmware.
+Physical display, buttons, scanning feel and audio acceptance remain user checks.
+No music database rebuild is required.
+
 ## Manager listening-score discovery — November 9, 2026
 
 Added Discover to the Windows Manager/loader. It reads the player's cumulative
