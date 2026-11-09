@@ -13,7 +13,7 @@
 #include <windows.h>
 #define podcast_mkdir _mkdir
 #else
-#define podcast_mkdir mkdir
+#define podcast_mkdir(path) mkdir(path, 0777)
 #endif
 
 #include "podcasts.h"
