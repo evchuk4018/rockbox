@@ -76,10 +76,12 @@ USB transfer; there is no Windows background service or server downloader.
 The drop is the **previous Monday–Sunday in America/New_York**, including DST
 changes. For example, on November 9 the requested dates are November 2–8.
 Public regular Videos-tab uploads are included; Shorts, live/archived streams,
-and upcoming releases are excluded. Full publication timestamps determine
-inclusion; feeds with a fixed episode count are not used. A checked preparation
-is reused through the week, including after restarting Manager. Failed episodes
-can be retried without downloading completed MP3s again.
+and upcoming releases are excluded. Channel listings are pre-filtered with
+approximate upload dates so large channels only fetch full metadata for likely
+in-week videos. Full publication timestamps determine inclusion; feeds with a
+fixed episode count are not used. A checked preparation is reused through the
+week, including after restarting Manager. Failed episodes can be retried without
+downloading completed MP3s again.
 
 **A successful replacement removes the entire old drop, including unfinished
 episodes and their positions.** Reconnecting in the same week preserves the

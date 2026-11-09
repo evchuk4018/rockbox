@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 
 namespace RockboxManager.Core;
@@ -47,7 +48,7 @@ public static class PodcastToolArguments
     public static ProcessSpec Metadata(PortableToolPaths tools, string url)
     {
         var args = Common(tools).ToList();
-        args.AddRange(["--skip-download", "--flat-playlist", "--dump-single-json", url]);
+        args.AddRange(["--skip-download", "--flat-playlist", "--extractor-args", "youtubetab:approximate_date", "--dump-single-json", url]);
         return new ProcessSpec(tools.YtDlp, args);
     }
 
@@ -129,16 +130,22 @@ public sealed class YtDlpPodcastSource(PortableToolPaths tools, IProcessRunner? 
                 resolvedId,
                 StringValue(root, "channel") ?? normalized.Name).Normalize();
             var entries = values.EnumerateArray().ToList();
-            var episodes = new List<PodcastEpisode>();
-            var errors = new List<string>();
-            // Do not use playlist order as a stopping condition. YouTube can put old uploads after newer ones.
+            var candidates = new List<(string Id, string Url)>();
             foreach (var entry in entries)
             {
-                cancellation.ThrowIfCancellationRequested();
                 var id = StringValue(entry, "id"); if (!PodcastId.IsValid(id ?? "")) continue;
                 if (IsExcluded(entry)) continue;
-                progress?.Report(new($"Reading episode metadata… {episodes.Count:N0}", episodes.Count, entries.Count));
-                var url = StringValue(entry, "webpage_url") ?? "https://www.youtube.com/watch?v=" + id;
+                // Approximate dates avoid a full metadata request for every channel video.
+                if (!CouldBeInWeek(entry, week)) continue;
+                candidates.Add((id!, StringValue(entry, "webpage_url") ?? "https://www.youtube.com/watch?v=" + id));
+            }
+            var episodes = new List<PodcastEpisode>();
+            var errors = new List<string>();
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var (id, url) = candidates[i];
+                progress?.Report(new($"Reading episode metadata… {i + 1:N0} of {candidates.Count:N0}", i, candidates.Count));
                 var detail = await runner.RunAsync(PodcastToolArguments.VideoMetadata(tools, url), cancellation);
                 if (detail.ExitCode != 0)
                 {
@@ -188,6 +195,23 @@ public sealed class YtDlpPodcastSource(PortableToolPaths tools, IProcessRunner? 
         episode = new PodcastEpisode(id!, channelId, channelName, title,
             timestamp.Value, TimeSpan.FromSeconds(seconds));
         return true;
+    }
+
+    private static bool CouldBeInWeek(JsonElement value, PodcastWeek week)
+    {
+        var approximate = Timestamp(value) ?? UploadDate(value);
+        if (approximate is null) return true;
+        var margin = TimeSpan.FromDays(2);
+        var start = new DateTimeOffset(week.Monday.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) - margin;
+        var end = new DateTimeOffset(week.Sunday.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero) + margin;
+        return approximate >= start && approximate <= end;
+    }
+
+    private static DateTimeOffset? UploadDate(JsonElement value)
+    {
+        if (!DateOnly.TryParseExact(StringValue(value, "upload_date"), "yyyyMMdd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var date)) return null;
+        return new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
     }
 
     private static DateTimeOffset? Timestamp(JsonElement value)

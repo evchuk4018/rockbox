@@ -60,7 +60,7 @@ static class PodcastsTests
             check(reloaded.Subscriptions.Single().ChannelId == "UC_saved");
         });
 
-        test("yt-dlp enumerates every playlist entry, gets full metadata, and filters video types", () =>
+        test("yt-dlp prefilters playlist entries by approximate date, gets full metadata, and filters video types", () =>
         {
             using var temp = new PodcastTemp();
             var calls = new List<ProcessSpec>();
@@ -86,9 +86,44 @@ static class PodcastsTests
             var week = new PodcastWeek(new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 8));
             var result = source.EnumerateAsync(new PodcastSubscription("UC_feed", "Feed", "https://www.youtube.com/channel/UC_feed"), week).GetAwaiter().GetResult();
             check(result.Checked && result.Error is null && result.Episodes.Count == 1 && result.Episodes[0].Id == "wanted");
-             check(calls.Count == 4 && calls.Any(c => c.Arguments.Contains("--flat-playlist")) && calls.Any(c => c.Arguments.Last().Contains("wanted")));
+            check(calls.Count == 3 && calls.Any(c => c.Arguments.Contains("--flat-playlist")) && calls.Any(c => c.Arguments.Last().Contains("wanted")));
             check(calls.All(c => c.Arguments.Contains("--ignore-config") && c.Arguments.Contains("--no-cookies")));
             check(calls[0].Arguments.Last().EndsWith("/videos", StringComparison.Ordinal));
+            check(calls[0].Arguments.Contains("--extractor-args") &&
+                calls[0].Arguments[calls[0].Arguments.ToList().IndexOf("--extractor-args") + 1] == "youtubetab:approximate_date");
+        });
+
+        test("Approximate listing timestamps skip out-of-week videos without fetching full metadata", () =>
+        {
+            using var temp = new PodcastTemp();
+            var calls = new List<ProcessSpec>();
+            var runner = new FakeProcessRunner(spec =>
+            {
+                calls.Add(spec);
+                if (spec.Arguments.Contains("--flat-playlist"))
+                    return JsonResult("{\"channel_id\":\"UC_feed\",\"channel\":\"Feed\",\"entries\":[" +
+                        "{\"id\":\"old\",\"timestamp\":1767225600}," +
+                        "{\"id\":\"before\",\"timestamp\":1772323200}," +
+                        "{\"id\":\"inweek\",\"timestamp\":1772668800}," +
+                        "{\"id\":\"after\",\"timestamp\":1773014400}," +
+                        "{\"id\":\"far\",\"timestamp\":1773964800}," +
+                        "{\"id\":\"nodate\"}]}");
+                var id = spec.Arguments.Last().Split("v=", StringSplitOptions.None).Last();
+                return id switch
+                {
+                    "before" => JsonResult("{\"id\":\"before\",\"channel_id\":\"UC_feed\",\"channel\":\"Feed\",\"title\":\"Before\",\"timestamp\":1772409600,\"duration\":60,\"live_status\":\"not_live\"}"),
+                    "inweek" => JsonResult("{\"id\":\"inweek\",\"channel_id\":\"UC_feed\",\"channel\":\"Feed\",\"title\":\"In week\",\"timestamp\":1772668800,\"duration\":60,\"live_status\":\"not_live\"}"),
+                    "after" => JsonResult("{\"id\":\"after\",\"channel_id\":\"UC_feed\",\"channel\":\"Feed\",\"title\":\"After\",\"timestamp\":1772928000,\"duration\":60,\"live_status\":\"not_live\"}"),
+                    _ => JsonResult("{\"id\":\"nodate\",\"channel_id\":\"UC_feed\",\"channel\":\"Feed\",\"title\":\"No date\",\"timestamp\":1772140800,\"duration\":60,\"live_status\":\"not_live\"}")
+                };
+            });
+            var source = new YtDlpPodcastSource(new PortableToolPaths(temp.Root), runner);
+            var week = new PodcastWeek(new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 8));
+            var result = source.EnumerateAsync(new PodcastSubscription("UC_feed", "Feed", "https://www.youtube.com/channel/UC_feed"), week).GetAwaiter().GetResult();
+            var detailUrls = calls.Where(c => !c.Arguments.Contains("--flat-playlist")).Select(c => c.Arguments.Last()).ToList();
+            check(result.Checked && result.Error is null && result.Episodes.Select(e => e.Id).OrderBy(id => id).SequenceEqual(new[] { "after", "inweek" }));
+            check(calls.Count == 5 && detailUrls.Any(u => u.Contains("before")) && detailUrls.Any(u => u.Contains("after")) &&
+                detailUrls.Any(u => u.Contains("inweek")) && detailUrls.Any(u => u.Contains("nodate")) && !detailUrls.Any(u => u.Contains("far")));
         });
 
         test("Portable podcast media arguments use explicit sibling tools and no shell", () =>
