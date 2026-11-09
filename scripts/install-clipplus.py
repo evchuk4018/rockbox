@@ -52,8 +52,14 @@ def install(args):
     def identities():
         identify(roots["Internal"], args.internal_serial)
         identify(roots["SD"], args.sd_serial)
-        assert "Product: Clip+" in (roots["Internal"] / "version.sdk").read_text()
-        assert "Target: sansaclipplus" in (roots["Internal"] / ".rockbox/rockbox-info.txt").read_text()
+        product = roots["Internal"] / "version.sdk"
+        if not product.exists():
+            product = roots["Internal"] / "MTABLE.SYS"
+        if not product.exists():
+            raise ValueError("Clip+ firmware identification file is missing")
+        info = roots["Internal"] / ".rockbox/rockbox-info.txt"
+        if not info.exists() or "Target: sansaclipplus" not in info.read_text(encoding="utf-8", errors="replace"):
+            raise ValueError("This is not the customized Clip+ Rockbox installation")
     identities()
     if digest(args.package) != args.sha256.lower():
         raise ValueError("Firmware package checksum mismatch")
