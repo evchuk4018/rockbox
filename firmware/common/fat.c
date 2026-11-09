@@ -2457,6 +2457,29 @@ sector_t fat_query_sectornum(const struct fat_filestr *filestr)
     return fat_bpb->bpb_secperclus*filestr->clusternum + filestr->sectornum + 1;
 }
 
+#if defined(SANSA_CLIPPLUS) && !defined(BOOTLOADER)
+/* Resolve the two preallocated crash-file sectors in normal, locked context.
+ * Never assume contiguous allocation, a partition offset, or the SD volume. */
+bool fat_crashlog_sectors(struct fat_file *file, sector_t sectors[2])
+{
+    struct bpb *fat_bpb = FAT_BPB(file->volume);
+    if (!fat_bpb || !fat_bpb->mounted || fat_bpb->drive != 0 ||
+        LOG_SECTOR_SIZE(fat_bpb) != 512 || file->firstcluster < 2)
+        return false;
+    struct fat_filestr stream;
+    fat_filestr_init(&stream, file);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        if (fat_seek(&stream, i + 1) < 0 ||
+            stream.lastsector < fat_bpb->firstdatasector ||
+            stream.lastsector >= fat_bpb->totalsectors)
+            return false;
+        sectors[i] = fat_bpb->startsector + stream.lastsector;
+    }
+    return sectors[0] != sectors[1];
+}
+#endif
+
 /* helper for fat_readwrite */
 static long transfer(struct bpb *fat_bpb, sector_t start, long count,
                      char *buf, bool write)

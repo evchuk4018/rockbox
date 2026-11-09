@@ -31,6 +31,7 @@
 #include "system.h"
 #include "logf.h"
 #include "rbversion.h"
+#include "crashlog.h"
 
 #ifdef HAVE_RB_BACKTRACE
 #include "gcc_extensions.h"
@@ -96,6 +97,12 @@ void panicf( const char *fmt, ...)
     vsnprintf( panic_buf, sizeof(panic_buf), fmt, ap );
     va_end( ap );
 
+#if defined(CPU_ARM) && defined(HAVE_RB_BACKTRACE)
+    bool logged = crashlog_capture("Panic", panic_buf, pc, sp, 0, 0);
+#else
+    bool logged = false;
+#endif
+
     lcd_set_viewport(NULL);
 
     int y = 1;
@@ -119,6 +126,7 @@ void panicf( const char *fmt, ...)
         }
     }
 
+    lcd_putsf(1, y++, "Crash log: %s", logged ? "saved" : "not saved");
 #if defined(HAVE_RB_BACKTRACE)
     rb_backtrace(pc, sp, &y);
 #endif

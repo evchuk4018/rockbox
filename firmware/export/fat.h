@@ -157,6 +157,9 @@ int fat_closewrite(struct fat_filestr *filestr, uint32_t size,
                    struct fat_direntry *fatentp);
 void fat_filestr_init(struct fat_filestr *filestr, struct fat_file *file);
 sector_t fat_query_sectornum(const struct fat_filestr *filestr);
+#if defined(SANSA_CLIPPLUS) && !defined(BOOTLOADER)
+bool fat_crashlog_sectors(struct fat_file *file, sector_t sectors[2]);
+#endif
 long fat_readwrite(struct fat_filestr *filestr, unsigned long sectorcount,
                    void *buf, bool write);
 void fat_rewind(struct fat_filestr *filestr);

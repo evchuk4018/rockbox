@@ -26,6 +26,7 @@
 
 #include <get_sp.h>
 #include <backtrace.h>
+#include "crashlog.h"
 
 static const char* const uiename[] = {
     "Undefined instruction",
@@ -101,6 +102,7 @@ void NORETURN_ATTR UIE(unsigned int pc, unsigned int num)
     lcd_set_drawinfo(DRMODE_SOLID, LCD_BLACK, LCD_WHITE);
 #endif
     unsigned line = 0;
+    uint32_t fsr = 0, far = 0;
 
     lcd_setfont(FONT_SYSFIXED);
     lcd_set_viewport(NULL);
@@ -121,6 +123,7 @@ void NORETURN_ATTR UIE(unsigned int pc, unsigned int num)
             asm volatile( "mrc p15, 0, %0, c5, c0, 0\n" : "=r"(status));
 
         lcd_putsf(0, line++, "FSR 0x%x", status);
+        fsr = status;
 
         unsigned int domain = (status >> 4) & 0xf;
         unsigned int fault = status & 0xf;
@@ -134,6 +137,7 @@ void NORETURN_ATTR UIE(unsigned int pc, unsigned int num)
             register unsigned address;
             /* read FAR (fault address register) */
             asm volatile( "mrc p15, 0, %0, c6, c0\n" : "=r"(address));
+            far = address;
             lcd_putsf(0, line++, "address 0x%8x", address);
 #if ARM_ARCH >= 6
             lcd_putsf(0, line++, (status & (1<<11)) ? "(write)" : "(read)");
@@ -141,6 +145,10 @@ void NORETURN_ATTR UIE(unsigned int pc, unsigned int num)
         }
     }   /* num == 1 || num == 2 // prefetch/data abort */
 #endif /* !defined(CPU_ARM7TDMI */
+
+    bool logged = crashlog_capture(uiename[num], uiename[num], pc,
+                                   (uint32_t)__get_sp(), fsr, far);
+    lcd_putsf(0, line++, "Crash log: %s", logged ? "saved" : "not saved");
 
 #ifdef HAVE_RB_BACKTRACE
     if (!triggered)

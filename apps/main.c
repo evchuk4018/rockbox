@@ -35,6 +35,7 @@
 #include "tree.h"
 #include "filetypes.h"
 #include "panic.h"
+#include "crashlog.h"
 #include "menu.h"
 #include "usb.h"
 #include "wifi.h"
@@ -717,6 +718,11 @@ static void init(void)
 
     pcm_init();
     dsp_init();
+
+#if defined(SANSA_CLIPPLUS) && !defined(SIMULATOR)
+    /* Reserve two preallocated sectors for post-restart crash diagnosis. */
+    crashlog_init();
+#endif
 
     CHART(">settings_load");
     settings_load();

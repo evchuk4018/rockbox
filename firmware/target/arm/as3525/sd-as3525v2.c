@@ -327,6 +327,7 @@ static struct semaphore transfer_completion_signal;
 static struct semaphore command_completion_signal;
 static volatile bool retry;
 static volatile int cmd_error;
+static volatile bool sd_transfer_active;
 
 #if defined(HAVE_MULTIDRIVE)
 #define EXT_SD_BITS (1<<2)
@@ -691,6 +692,7 @@ static int sd_transfer_sectors(IF_MD(int drive,) sector_t start,
     unsigned int real_numblocks;
 
     mutex_lock(&sd_mtx);
+    sd_transfer_active = true;
 #ifndef BOOTLOADER
     enable_controller(true);
     led(true);
@@ -854,8 +856,106 @@ exit:
     led(false);
 #endif
     mutex_unlock(&sd_mtx);
+    sd_transfer_active = false;
     return ret;
 }
+
+#if defined(SANSA_CLIPPLUS) && !defined(BOOTLOADER)
+/* Persistent crash-log polling writer. Called only with IRQ/FIQ disabled.
+ * It never acquires sd_mtx, starts DMA, resets a card, modifies FAT metadata,
+ * accesses the removable card, or waits for scheduler-driven completion. */
+#define CRASH_POLL_LIMIT 100000u /* one second per bounded wait, at 10 us */
+#ifndef SD_CRASHLOG_TEST
+#define CRASH_POLL() udelay(10)
+#define CRASH_CLEAR(bits) do { MCI_RAW_STATUS = (bits); } while (0)
+#define CRASH_FIFO(value) do { *MCI_FIFO = (value); } while (0)
+#endif
+
+static bool crashlog_wait_clear(unsigned long mask)
+{
+    for (unsigned int i = 0; i < CRASH_POLL_LIMIT; i++)
+    {
+        CRASH_POLL();
+        if (!(MCI_CTRL & mask)) return true;
+    }
+    return false;
+}
+
+static bool crashlog_command(unsigned int command, unsigned long argument,
+                             bool response, bool data)
+{
+    CRASH_CLEAR(MCI_INT_CD | MCI_CMD_ERROR);
+    MCI_ARGUMENT = argument;
+    unsigned long card = amsv2_variant == 1 ? CMD_CARD_NO(1) : CMD_CARD_NO(0);
+    MCI_COMMAND = command | card | CMD_DONE_BIT | CMD_WAIT_PRV_DAT_BIT |
+        (response ? CMD_RESP_EXP_BIT | CMD_CHECK_CRC_BIT : 0) |
+        (data ? CMD_DATA_EXP_BIT | CMD_RW_BIT : 0);
+    for (unsigned int i = 0; i < CRASH_POLL_LIMIT; i++)
+    {
+        CRASH_POLL();
+        unsigned long status = MCI_RAW_STATUS;
+        if (status & MCI_CMD_ERROR) return false;
+        if (status & MCI_INT_CD)
+        {
+            CRASH_CLEAR(MCI_INT_CD);
+            return !response || !(MCI_RESP0 & SD_R1_CARD_ERROR);
+        }
+    }
+    return false;
+}
+
+bool sd_crashlog_write(sector_t sector, const void *data)
+{
+    if (sd_transfer_active || !card_info[INTERNAL_AS3525].initialized ||
+        sector >= card_info[INTERNAL_AS3525].numblocks || !data)
+        return false;
+
+    /* An in-flight transfer belongs to another operation: do not disturb it. */
+    CGU_PERI |= CGU_MCI_CLOCK_ENABLE;
+    CGU_SDSLOT |= 1 << 7;
+    if (MCI_STATUS & (DATA_BUSY | DATA_STAT_MC_BUSY) || MCI_COMMAND & CMD_DONE_BIT)
+        return false;
+
+    MCI_CTRL &= ~(INT_ENABLE | DMA_ENABLE);
+    MCI_MASK = 0;
+    if (amsv2_variant == 1) GPIOB_PIN(5) = 1 << 5;
+    CRASH_CLEAR(0xffffffffu);
+    MCI_CTRL |= FIFO_RESET;
+    if (!crashlog_wait_clear(FIFO_RESET)) return false;
+    if (!crashlog_command(SD_SELECT_CARD, card_info[0].rca, true, false)) return false;
+
+    MCI_BLKSIZ = SD_BLOCK_SIZE;
+    MCI_BYTCNT = SD_BLOCK_SIZE;
+    const uint32_t *words = data;
+    for (unsigned int word = 0; word < SD_BLOCK_SIZE / sizeof(*words); word++)
+    {
+        if (MCI_STATUS & FIFO_FULL) return false;
+        CRASH_FIFO(words[word]);
+    }
+    sector_t physical = sector + AMS_OF_SIZE;
+    unsigned long argument = card_info[0].ocr & SD_OCR_CARD_CAPACITY_STATUS
+        ? physical : physical * SD_BLOCK_SIZE;
+    if (!crashlog_command(SD_WRITE_BLOCK, argument, true, true)) return false;
+    bool transferred = false;
+    for (unsigned int i = 0; i < CRASH_POLL_LIMIT; i++)
+    {
+        CRASH_POLL();
+        unsigned long status = MCI_RAW_STATUS;
+        if (status & MCI_DATA_ERROR) return false;
+        if ((status & MCI_INT_DTO) && !(MCI_STATUS & DATA_BUSY))
+        {
+            transferred = true;
+            break;
+        }
+    }
+    if (!transferred) return false;
+    if (!crashlog_command(SD_SEND_STATUS, card_info[0].rca, true, false) ||
+        !(MCI_RESP0 & SD_R1_READY_FOR_DATA) || SD_R1_CURRENT_STATE(MCI_RESP0) != SD_TRAN)
+        return false;
+    return crashlog_command(SD_DESELECT_CARD, 0, false, false);
+}
+/* End persistent crash-log polling writer */
+#endif
 
 int sd_read_sectors(IF_MD(int drive,) sector_t start, int count,
                     void* buf)
@@ -933,6 +1033,7 @@ int sd_event(long id, intptr_t data)
     case SYS_HOTSWAP_INSERTED:
     case SYS_HOTSWAP_EXTRACTED:
         mutex_lock(&sd_mtx); /* lock-out card activity */
+        sd_transfer_active = true;
 
         /* Force card init for new card, re-init for re-inserted one or
          * clear if the last attempt to init failed with an error. */
@@ -946,6 +1047,7 @@ int sd_event(long id, intptr_t data)
         }
 
         mutex_unlock(&sd_mtx);
+        sd_transfer_active = false;
         break;
 #endif /* HAVE_HOTSWAP */
     default:

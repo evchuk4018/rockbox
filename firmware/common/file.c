@@ -1149,6 +1149,18 @@ file_error:
 
 /** Extensions **/
 
+#if defined(SANSA_CLIPPLUS) && !defined(BOOTLOADER)
+bool file_crashlog_sectors(int fildes, sector_t sectors[2])
+{
+    struct filestr_desc *file = GET_FILESTR(READER, fildes);
+    if (!file) return false;
+    bool ok = *file->sizep == 1024 && !(file->stream.flags & FD_WRITE) &&
+        fat_crashlog_sectors(file->stream.fatstr.fatfilep, sectors);
+    RELEASE_FILESTR(READER, file);
+    return ok;
+}
+#endif
+
 int rbfs_modtime(const char *path, time_t modtime)
 {
     DEBUGF("modtime(path=\"%s\",modtime=%d)\n", path, (int) modtime);

@@ -42,6 +42,10 @@ int  sd_init(void) STORAGE_INIT_ATTR;
 void sd_close(void);
 int  sd_read_sectors(IF_MD(int drive,) sector_t start, int count, void* buf);
 int  sd_write_sectors(IF_MD(int drive,) sector_t start, int count, const void* buf);
+#if defined(SANSA_CLIPPLUS) && !defined(SIMULATOR) && !defined(BOOTLOADER)
+/* Emergency single-sector PIO write to initialized internal storage only. */
+bool sd_crashlog_write(sector_t sector, const void *data);
+#endif
 void sd_spin(void);
 int  sd_spinup_time(void); /* ticks */
 

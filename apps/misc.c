@@ -62,6 +62,7 @@
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
 #include "podcasts.h"
 #endif
+#include "crashlog.h"
 #include "yesno.h"
 #include "viewport.h"
 #include "list.h"
@@ -350,6 +351,7 @@ static void system_flush(void)
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPPLUS)
     podcast_wps_pause_save();
 #endif
+    crashlog_disarm();
     playlist_shutdown();
     tree_flush();
     open_plugin_cache_flush();
@@ -693,6 +695,9 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
 #endif
 #endif
             system_restore();
+#if defined(SANSA_CLIPPLUS) && !defined(SIMULATOR)
+            crashlog_init();
+#endif
             return SYS_USB_CONNECTED;
         }
 
@@ -737,6 +742,9 @@ long default_event_handler_ex(long event, void (*callback)(void *), void *parame
             system_flush();
             check_bootfile(true); /* state gotten in main.c:init() */
             system_restore();
+#if defined(SANSA_CLIPPLUS) && !defined(SIMULATOR)
+            crashlog_init();
+#endif
         }
             return SYS_FS_CHANGED;
 #endif
