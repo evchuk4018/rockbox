@@ -14,7 +14,7 @@
 %V(64,0,64,32,1)
 %ac%sw(4)%?it<%it|%fn>
 %V(64,34,64,16,1)
-%ac%sw(2)%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>
+%ac%?hP<%hP|%sw(2)%?ia<%ia|%?iA<%iA|%Sx(Unknown)>>>
 # Compact status and playlist cues share the heart's row beside the cover.
 %V(64,51,14,8,1)
 %?bp<%?bc<%xd(Ba)|%xd(Bb)>|%?bl<|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)>>

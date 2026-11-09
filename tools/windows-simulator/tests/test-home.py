@@ -123,6 +123,7 @@ int main(int argc, char **argv) {
         self.assertIn((64, 34, 64, 16, 1), viewports)
         self.assertIn("%sw(4)", skin)
         self.assertIn("%sw(2)", skin)
+        self.assertIn("%?hP<%hP|", skin)
         footer = [v for v in viewports if v[1] == 51]
         self.assertEqual(len(footer), 5)
         for a, b in zip(footer, footer[1:]):
