@@ -14,7 +14,7 @@
 extern bool file_crashlog_sectors(int fd, sector_t sectors[2]);
 #define CRASH_OPEN open
 #define CRASH_CLOSE close
-#define CRASH_SIZE filesize
+#define CRASH_SIZE ffilesize
 #define CRASH_READ read
 #define CRASH_WRITE write
 #define CRASH_SYNC fsync
