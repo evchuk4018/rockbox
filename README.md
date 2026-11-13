@@ -43,6 +43,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
 The project folder itself is one Git repository. `origin` is the user's fork;
 `upstream` is the official [Rockbox repository](https://github.com/Rockbox/rockbox).
 
+The parent `C:\RockboxDev` also holds music staging and recovery data. The
+[November 13 cleanup record](docs/workspace-cleanup-20261113.md) describes what
+was pruned, the retained recovery set, and current pending-transfer hashes.
+
 ## Toolchain
 
 Uses `C:\msys64`, MSYS2 **UCRT64**, MinGW-w64 GCC 16.2.0, GNU Make 4.4.1,

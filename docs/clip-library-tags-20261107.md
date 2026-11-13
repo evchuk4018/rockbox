@@ -83,6 +83,12 @@ files.
 
 Under `C:/RockboxDev/logs/music-tags-20261107`:
 
+**November 13 workspace cleanup:** `originals/` and `removed-duplicates/` below
+now contain only unmatched files, rather than complete historical rollback sets.
+The full `player-before/` snapshot, state backups and evidence remain. Six pending
+TV Girl staging files were restored before pruning. See the
+[cleanup record](workspace-cleanup-20261113.md) for verification and current hashes.
+
 - `player-before/` full 802-file player snapshot
 - `originals/` original local files
 - `removed-duplicates/` removed player and staging files

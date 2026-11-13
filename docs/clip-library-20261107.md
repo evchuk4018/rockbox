@@ -12,6 +12,12 @@ Installed firmware **e1ee059a8d-261107**. Verified all 336 package files.
 Original firmware/settings: `device-before/.rockbox`. Changed audio originals and exact path/hash mappings: `originals/` and `applied.json`, under `C:/RockboxDev/logs/music-library-20261107`.
 No audio was imported, deleted, renamed, or transcoded.
 
+**November 13 workspace cleanup:** verified redundant originals and most of the
+old `db-source` snapshot were pruned. Only unmatched originals/source files remain;
+`originals/` is no longer a complete rollback set and `db-source` is no longer a
+complete checkout. The journals, recovery files and both source archives remain.
+See the [cleanup record](workspace-cleanup-20261113.md).
+
 Tests: Windows simulator build; Clip+ ARM build on homelab; seven Home tests and library harness on Linux; three metadata tests; all 20 Manager regressions and portable publish.
 
 Safely eject both volumes, disconnect USB, restart, then check Home middle/Right, Artists/Albums, and the long-press song menu. Visual and physical playback checks remain for the user.
