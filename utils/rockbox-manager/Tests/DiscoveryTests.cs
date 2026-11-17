@@ -47,103 +47,154 @@ static class DiscoveryTests
                 "131072\t0\t1\t0\t0\t/M/a.mp3\n" + "5\t0\t0\t0\t0\t/<microSD1>/M/A.mp3\n");
             var before = f.Hashes(); var profile = ListeningProfile.Load(f.Device, [sd, internalSong]);
             check(profile.Scores.Count == 2 && profile.Scores[sd.Path] == 1 && profile.Scores[internalSong.Path] == 2);
-            check(profile.Status.Contains("1 paths outside") && before.SequenceEqual(f.Hashes()));
-            check(ListeningProfile.Load(f.Device with { Internal = f.Device.Sd! }, [sd]).Genres.Count == 0);
+            check(before.SequenceEqual(f.Hashes()));
+            check(ListeningProfile.Load(f.Device with { Internal = f.Device.Sd! }, [sd]).Scores.Count == 0);
         });
-        test("Genre preferences account for early skips and reduce sparse-genre bias", () =>
-        {
-            Track[] tracks = [Song("a"), Song("b"), Song("c", "Skipped"), Song("d", genre: "Rock-Indie Rock"), Song("new", genre: "Jazz")];
-            var text = "262144\t0\t2\t0\t0\t/<microSD1>/M/a.mp3\n" +
-                "262144\t0\t2\t0\t0\t/<microSD1>/M/b.mp3\n" +
-                "0\t0\t0\t0\t8\t/<microSD1>/M/c.mp3\n" +
-                "131072\t0\t1\t0\t0\t/<microSD1>/M/d.mp3\n";
-            var profile = ListeningProfile.FromText(text, tracks, 1);
-            check(profile.Genres.Count == 2 && profile.Genres[0].Genre == "Pop-Dance Pop");
-            check(profile.Genres[0].SongCount == 3 && profile.Genres[0].Points == 8 && profile.Genres[0].FavoriteArtist == "Artist");
-            check(profile.Genres[0].Strength == 1.6);
-        });
-        test("Library scans preserve compound parent genres for listening preferences", () =>
+        test("Library scans preserve compound parent genres for Discovery groups", () =>
         {
             using var f = new Fixture();
             var path = f.PathFor(Storage.Sd, "M/genre.mp3");
             var frame = new byte[417]; frame[0] = 0xff; frame[1] = 0xfb; frame[2] = 0x90; frame[3] = 0x64;
             using (var output = File.Create(path)) for (int i = 0; i < 12; i++) output.Write(frame);
-            foreach (var genre in new[] { "Hip-Hop/Rap-Trap", "R&B/Soul-Contemporary" })
+            foreach (var (genre, group) in new[] { ("Hip-Hop/Rap-Trap", "Hip-Hop/Rap"), ("R&B/Soul-Contemporary", null) })
             {
                 using (var audio = TagLib.File.Create(path)) { audio.Tag.Genres = [genre]; audio.Save(); }
                 var track = PlayerLibrary.Scan(f.Device).Single(t => t.Path.RelativePath == "M/genre.mp3");
-                var profile = ListeningProfile.FromText("65536\t0\t1\t0\t0\t/<microSD1>/M/genre.mp3\n", [track], 0);
-                check(track.Genre == genre && profile.Genres.Single().Genre == genre);
+                check(track.Genre == genre && DiscoveryUpdate.Group(track.Genre) == group);
             }
         });
-        test("Discovery prefers subgenres and makes no catalog requests without positive scores", () =>
+        test("Discovery groups are mainstream pop and any rap", () =>
         {
-            check(DiscoveryService.GenreTerms("Rock-Indie Rock").SequenceEqual(new[] { "indie rock", "rock" }));
-            check(DiscoveryService.GenreTerms("Hip-Hop/Rap-Trap").SequenceEqual(new[] { "trap", "hip hop" }));
-            check(DiscoveryService.GenreTerms("Hip-Hop/Rap-Conscious")[0] == "conscious hip hop");
-            check(DiscoveryService.GenreTerms("R&B/Soul-Contemporary")[0] == "contemporary r&b");
-            check(DiscoveryService.GenreTerms("Pop-Dance")[0] == "dance-pop");
-            check(DiscoveryService.GenreTerms("Pop-Indie")[0] == "indie pop");
-            using var http = new HttpClient(new DiscoveryHttp(_ => throw new Exception("Unexpected network call")));
-            var result = new DiscoveryService(http).Find([], []).GetAwaiter().GetResult();
-            check(result.Suggestions.Count == 0);
+            foreach (var pop in new[] { "Pop", "Pop-Dance", "Dance-pop", "dance-pop; pop", "pop; electropop", "Pop-Dance Pop" })
+                check(DiscoveryUpdate.Group(pop) == "Pop");
+            foreach (var rap in new[] { "Hip-Hop/Rap", "hip hop; pop rap", "Hip-Hop/Rap-Pop Rap", "hip hop; trap" })
+                check(DiscoveryUpdate.Group(rap) == "Hip-Hop/Rap");
+            foreach (var other in new[] { "Pop-Indie", "Pop-Rock", "pop; pop rock", "pop; alternative pop", "Pop-R&B", "Rock", "" })
+                check(DiscoveryUpdate.Group(other) is null);
         });
-        test("Discovery returns a small varied set and excludes owned music and compilation albums", () =>
+        test("Only played, unliked, low-scoring Discovery songs are retired", () =>
         {
-            var requests = new List<string>();
-            var ownedGroup = (Dictionary<string, object>)Item("Alternate edition title", "Artist", votes: 1000);
-            var owned = Song("Favourite");
-            typeof(Track).GetProperty("ArtworkReleaseGroupId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .SetValue(owned, (string)ownedGroup["id"]);
-            using var http = new HttpClient(new DiscoveryHttp(request =>
-            {
-                requests.Add(Uri.UnescapeDataString(request.RequestUri!.Query));
-                check(request.Headers.UserAgent.ToString().Contains("RockboxManager/"));
-                var album = request.RequestUri.AbsolutePath.Contains("release-group");
-                return album ? Response(request, ownedGroup, Item(" owned ", "ARTIST", votes: 999), Item("Compilation", "Other", "Compilation", 999),
-                    Item("New album", "New artist", votes: 10), Item("Another album", "Another artist")) :
-                    Response(request, Item(" favourite ", "ARTIST", votes: 999), Item("New song", "New artist", votes: 99), Item("Fresh song", "Fresh artist"));
-            }));
-            var result = new DiscoveryService(http).Find([new("Pop-Dance Pop", 8, 3, "Artist"), new("Rock-Indie Rock", 5, 2, "Artist"),
-                new("Jazz", 1, 1, "Artist")], [owned]).GetAwaiter().GetResult();
-            check(result.Suggestions.Count == 4 && requests.Count == 4 && requests.All(q => !q.Contains("Jazz")));
-            check(result.Suggestions.All(s => s.Title.Trim().ToLowerInvariant() is not ("owned" or "favourite" or "compilation" or "alternate edition title")));
-            check(result.Suggestions[1].Artist == "Fresh artist" && result.Suggestions.Select(s => s.Title).Distinct().Count() == 4);
-            check(result.Suggestions.Count(s => s.Kind == "Album") == 2 && result.Suggestions.All(s => s.Url.StartsWith("https://musicbrainz.org/")));
+            Track D(string name) => new(new(Storage.Sd, DiscoveryUpdate.Folder + name + ".mp3"), name, "A", "Discovery", "Pop", TimeSpan.Zero);
+            Track[] tracks = [D("skipped"), D("liked"), D("unplayed"), D("loved"), Song("library-skip")];
+            var scores = ListeningProfile.Parse(
+                $"0\t0\t0\t0\t3\t/<microSD1>/{DiscoveryUpdate.Folder}skipped.mp3\n" +
+                $"0\t0\t0\t0\t3\t/<microSD1>/{DiscoveryUpdate.Folder}liked.mp3\n" +
+                $"196608\t0\t3\t0\t0\t/<microSD1>/{DiscoveryUpdate.Folder}loved.mp3\n" +
+                "0\t0\t0\t0\t3\t/<microSD1>/M/library-skip.mp3\n");
+            var prune = DiscoveryUpdate.Prune(tracks, scores, new HashSet<SongPath> { tracks[1].Path }, 0);
+            check(prune.Count == 1 && prune[0] == tracks[0].Path);
         });
-        test("Discovery falls back to a scored artist and rejects unrelated artist matches", () =>
+        test("Favourite artists rank scored songs within a group", () =>
+        {
+            Track[] tracks = [Song("a", "Katy"), Song("b", "Katy"), Song("c", "Gaga"), Song("d", "Rapper", "Hip-Hop/Rap"),
+                Song("e", "Various Artists"), Song("f", "Quiet")];
+            var scores = ListeningProfile.Parse(string.Concat(new[] { ("a", 1), ("b", 2), ("c", 4), ("d", 9), ("e", 9), ("f", 0) }
+                .Select(x => $"{x.Item2 * 65536}\t0\t1\t0\t0\t/<microSD1>/M/{x.Item1}.mp3\n")));
+            check(DiscoveryUpdate.FavoriteArtists(tracks, scores, "Pop", 0).SequenceEqual(new[] { "Gaga", "Katy" }));
+            check(DiscoveryUpdate.FavoriteArtists(tracks, scores, "Hip-Hop/Rap", 0).SequenceEqual(new[] { "Rapper" }));
+        });
+        test("Song search alternates artists and tags and skips owned, seen and alternate versions", () =>
         {
             var queries = new List<string>();
             using var http = new HttpClient(new DiscoveryHttp(request =>
             {
                 var query = Uri.UnescapeDataString(request.RequestUri!.Query); queries.Add(query);
-                var title = request.RequestUri.AbsolutePath.Contains("release-group") ? "Album idea" : "Song idea";
-                return query.Contains("artist:") ? Response(request, Item("Wrong", "Other", votes: 999), Item(title, "Favourite")) : Response(request);
+                check(request.RequestUri.AbsolutePath == "/ws/2/recording/" && request.Headers.UserAgent.ToString().Contains("RockboxManager/"));
+                return query.Contains("artist:") ? Response(request, Item("Owned", "Katy", votes: 99), Item("Song (Live)", "Katy", votes: 50),
+                        Item("Seen", "Katy", votes: 40), Item("Wrong", "Other", votes: 30), Item("Roar", "Katy", votes: 1))
+                    : Response(request, Item("Firework", "Katy", votes: 99), Item("Fresh", "New", votes: 2));
             }));
-            var result = new DiscoveryService(http).Find([new("Rock-Unknown subgenre", 5, 2, "Favourite")], []).GetAwaiter().GetResult();
-            check(result.Suggestions.Count == 2 && result.Suggestions.All(s => s.Artist == "Favourite" && s.Reason.Contains("highest-scoring")));
-            check(queries.Count == 6 && queries[0].Contains("unknown subgenre") && queries[1].Contains("tag:\"rock\""));
+            var seen = new HashSet<string> { LibraryViews.Identity("Katy", "Seen") };
+            var songs = new DiscoveryService(http).Songs("Pop", ["dance-pop", "pop"], ["Katy"], 2, [Song("Owned", "Katy")], seen)
+                .GetAwaiter().GetResult();
+            check(songs.Count == 2 && songs[0] == new MusicSuggestion("Pop", "Roar", "Katy") && songs[1] == new MusicSuggestion("Pop", "Fresh", "New"));
+            check(queries.Count == 2 && queries[0].Contains("artist:\"Katy\"") && queries[1].Contains(@"tag:""dance\-pop"""));
+            check(seen.Contains(LibraryViews.Identity("Katy", "Roar")) && seen.Contains(LibraryViews.Identity("New", "Fresh")));
         });
-        test("Catalog failures return an actionable status and cancellation stops work", () =>
+        test("Catalog failures skip a query and cancellation stops the search", () =>
         {
-            using var http = new HttpClient(new DiscoveryHttp(_ => new(HttpStatusCode.Forbidden)));
+            int calls = 0;
+            using var http = new HttpClient(new DiscoveryHttp(request => ++calls switch
+            {
+                1 => new(HttpStatusCode.ServiceUnavailable), 2 => Response(request, Item("Retried", "A")),
+                3 => new(HttpStatusCode.Forbidden), _ => new(HttpStatusCode.OK) { Content = new StringContent("not json") }
+            }));
             var service = new DiscoveryService(http);
-            var result = service.Find([new("Pop", 1, 1, "")], []).GetAwaiter().GetResult();
-            check(result.Suggestions.Count == 0 && result.Status.Contains("requests failed"));
+            var songs = service.Songs("Pop", ["a", "b", "c"], [], 3, [], new HashSet<string>()).GetAwaiter().GetResult();
+            check(songs.Count == 1 && songs[0].Title == "Retried" && calls == 4);
             using var canceled = new CancellationTokenSource(); canceled.Cancel();
-            try { service.Find([new("Pop", 1, 1, "")], [], cancellation: canceled.Token).GetAwaiter().GetResult(); }
+            try { service.Songs("Pop", ["a"], [], 1, [], new HashSet<string>(), canceled.Token).GetAwaiter().GetResult(); }
             catch (OperationCanceledException) { return; }
             throw new Exception("Expected cancellation");
         });
-        test("Temporary catalog failures retry once and malformed JSON stays recoverable", () =>
+        test("Discovery playlist accumulates new songs and retired songs leave every playlist except likes", () =>
         {
-            int calls = 0;
-            using var http = new HttpClient(new DiscoveryHttp(request => ++calls == 1 ? new(HttpStatusCode.ServiceUnavailable) :
-                calls == 2 ? Response(request, Item("A new album", "Fresh")) : new(HttpStatusCode.OK) { Content = new StringContent("not json") }));
-            var result = new DiscoveryService(http).Find([new("Pop", 1, 1, "")], []).GetAwaiter().GetResult();
-            check(result.Suggestions.Count == 1 && calls == 3 && result.Status.Contains("requests failed"));
+            using var f = new Fixture();
+            var a = new SongPath(Storage.Sd, "M/a.mp3"); var b = new SongPath(Storage.Sd, "M/b.mp3");
+            var added = new SongPath(Storage.Sd, DiscoveryUpdate.Folder + "x.mp3");
+            var session = EditSession.Load(f.Device);
+            DiscoveryUpdate.ApplyPlaylists(session, [a], [added, b]);
+            var discovery = session.VisiblePlaylists.Single(p => p.Name == "Discovery");
+            check(discovery.IsNew && discovery.Entries.SequenceEqual(new[] { added, b }));
+            check(session.VisiblePlaylists.Single(p => p.Name == "Mix").Entries.SequenceEqual(new[] { b }) && session.Liked.Entries.SequenceEqual(new[] { a }));
+            var sent = new SyncEngine().Execute(SyncBatch.Build(session, f.Backups), () => f.Device);
+            check(sent.Success);
+            var reloaded = EditSession.Load(f.Device);
+            DiscoveryUpdate.ApplyPlaylists(reloaded, [b], [added, a]);
+            check(reloaded.VisiblePlaylists.Single(p => p.Name == "Discovery").Entries.SequenceEqual(new[] { added, a }));
+        });
+        test("Update retires low scorers, installs new songs on SD and never repeats a suggestion", () =>
+        {
+            using var f = new Fixture();
+            var old = DiscoveryUpdate.Folder + "Old - Song.mp3";
+            f.Write(Storage.Sd, old, "old"); f.Write(Storage.Sd, Path.ChangeExtension(old, null) + CoverConverter.Suffix, "cover");
+            f.Write(Storage.Internal, ".rockbox/home-scores.tsv", $"0\t0\t0\t0\t2\t/<microSD1>/{old}\n");
+            var library = PlayerLibrary.Scan(f.Device);
+            var runs = new List<ProcessSpec>();
+            var runner = new FakeRunner(spec =>
+            {
+                runs.Add(spec);
+                var args = spec.Arguments;
+                if (spec.FileName.EndsWith("yt-dlp.exe"))
+                {
+                    if (args[^1].Contains("Missing")) return new(1, "", "no results");
+                    File.WriteAllText(args[args.ToList().IndexOf("--output") + 1].Replace("%(ext)s", "webm"), "source");
+                }
+                else File.WriteAllText(args[^1], "mp3:" + args[args.ToList().IndexOf("-i") + 1].Length);
+                return new(0, "", "");
+            });
+            using var http = new HttpClient(new DiscoveryHttp(request =>
+            {
+                var query = Uri.UnescapeDataString(request.RequestUri!.Query);
+                return query.Contains("pop") ? Response(request, Item("Pop One", "P1", votes: 9), Item("Pop Two", "P2", votes: 8), Item("Pop Three", "P3"))
+                    : Response(request, Item("Rap One", "R1", votes: 9), Item("Missing", "R2", votes: 8), Item("Rap Three", "R3"));
+            }));
+            var history = Path.Combine(f.Root, "history.json");
+            var update = new DiscoveryUpdate(new DiscoveryService(http), new PortableToolPaths(Path.Combine(f.Root, "tools")), history, runner);
+            var liked = EditSession.Load(f.Device).Liked.Entries.ToHashSet();
+            var changes = update.RunAsync(f.Device, library, liked).GetAwaiter().GetResult();
+            check(changes.Removed.Single().RelativePath == old && !File.Exists(f.PathFor(Storage.Sd, old)));
+            check(!File.Exists(f.PathFor(Storage.Sd, Path.ChangeExtension(old, null) + CoverConverter.Suffix)));
+            check(changes.Added.Count == 3 && changes.Added.All(p => p.Storage == Storage.Sd && File.Exists(f.PathFor(p.Storage, p.RelativePath))));
+            check(changes.Added[0].RelativePath == DiscoveryUpdate.Folder + "P1 - Pop One.mp3");
+            check(changes.Errors.Single().StartsWith("R2 — Missing: no results"));
+            check(runs.Any(r => r.Arguments.Contains("genre=Hip-Hop/Rap")) && runs.Any(r => r.Arguments.Contains("ytsearch1:P1 - Pop One official audio")));
+            var again = update.RunAsync(f.Device, PlayerLibrary.Scan(f.Device), liked).GetAwaiter().GetResult();
+            // History holds only installed songs: a failed download is offered again, an installed one never is.
+            check(again.Added.Select(p => p.RelativePath).SequenceEqual(new[] { "P3 - Pop Three.mp3", "R3 - Rap Three.mp3" }.Select(n => DiscoveryUpdate.Folder + n)));
+            check(again.Errors.Count == 2 && runs.Count(r => r.Arguments.Contains("ytsearch1:R2 - Missing official audio")) == 2);
+        });
+        test("Discovery file names are safe and bounded", () =>
+        {
+            check(DiscoveryUpdate.FileName(new("Pop", "What? / Why: \"Now\"", "A*B")) == "A_B - What_ _ Why_ _Now_.mp3");
+            check(DiscoveryUpdate.FileName(new("Pop", new string('x', 300), "A")).Length == 104);
         });
     }
+}
+
+sealed class FakeRunner(Func<ProcessSpec, ProcessResult> run) : IProcessRunner
+{
+    public Task<ProcessResult> RunAsync(ProcessSpec spec, CancellationToken cancellation = default) => Task.FromResult(run(spec));
 }
 
 sealed class DiscoveryHttp(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler

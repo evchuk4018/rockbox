@@ -22,10 +22,8 @@ and cards connected separately through a card reader are outside this version.
 - **Artists / Albums:** browse by album artist (falling back to track artist).
   Albums with the same title and different artists stay separate. Album tracks
   use disc number, track number, then title. The table also displays these tags.
-- **Discover:** reads your player's listening scores and suggests a few new
-  albums and songs across your strongest genres. See [Listening scores and discovery](#listening-scores-and-discovery).
 - **Artwork:** covers prepare automatically in the background. Select a song for
-  its 61×61 player preview and status. Ready covers join the draft; Send to Player
+  its 61×61 player preview and status. Ready covers join the draft; Update
   writes them. Retry artwork retries failed lookups without changing music tags.
 - **Playlists:** create, rename, duplicate, delete, add songs, remove entries, or
   reorder with Up/Down or drag and drop. Clear filters and sorting before reordering.
@@ -34,27 +32,27 @@ and cards connected separately through a card reader are outside this version.
   Use Like/Unlike or edit its entries. Its filename is protected. Liked Music is
   a separate ordinary playlist. An SD file named Liked Songs is left untouched;
   the firmware's likes live on internal storage.
-- **Send to Player:** apply the pending changes. Ordinary playlist edits require
-  both original storage volumes so internal and SD copies remain synchronized.
-  Likes can be sent without an SD card. Artwork requires the original storage
-  containing its source songs; covers are not mirrored between volumes.
-- **Podcasts:** open Podcasts from the top bar even while the player is disconnected.
-  Add or remove public HTTPS YouTube channel URLs. Manager resolves and persists stable
-  channel IDs, prepares the latest completed America/New_York Monday-Sunday drop in the
-  background, and shows channel names, dates, episode count, per-file progress, Cancel,
-  and Retry. Prepared audio is sent automatically when the original player and SD card
-  reconnect; it is also safe to retry from the Podcasts panel. No YouTube account or
-  browser cookies are used.
+- **Update:** the only action besides playlist editing. It locks the window behind a
+  progress bar until it finishes, then reloads the player. In order it:
+  1. sends pending playlist, like and artwork edits (or retries an interrupted send;
+     a send that fails twice is abandoned and its backups kept);
+  2. prepares and transfers the latest completed America/New_York Monday-Sunday
+     podcast week for the existing subscriptions;
+  3. retires low-scoring Discovery songs and installs new ones (see
+     [Discovery](#listening-scores-and-discovery));
+  4. updates the **Discovery** playlist and removes retired songs from every playlist.
+  Update needs the original player and SD card. Problems from any step are shown
+  together in one message after it finishes; the remaining steps still run.
 
-  Portable podcast tools are loaded only from `tools` beside `RockboxManager.exe`:
-  `yt-dlp.exe`, `deno.exe`, `ffmpeg.exe`, and `ffprobe.exe`. Manager passes explicit
-  argument lists, ignores yt-dlp configuration, uses Deno for YouTube JavaScript, and
-  enforces stereo 128-kbps MP3 output. The PC cache is under
-  `%LOCALAPPDATA%\RockboxManager\Podcasts`; card audio is owned only under
+  Podcast subscriptions are kept in `%LOCALAPPDATA%\RockboxManager\Podcasts` and are
+  no longer edited in the window. Portable tools are loaded only from `tools` beside
+  `RockboxManager.exe`: `yt-dlp.exe`, `deno.exe`, `ffmpeg.exe`, and `ffprobe.exe`.
+  Manager passes explicit argument lists, ignores yt-dlp configuration, and uses no
+  YouTube account or browser cookies. Podcast card audio is owned only under
   `Podcasts/RockboxManager` and is excluded with `database.ignore`.
-- **Discard changes:** reset the current draft. Drafts are held in memory until
-  sending, and closing asks before discarding them. Disconnection retains drafts
-  for the same player. Refresh reloads the library when no changes are pending.
+
+Drafts are held in memory until Update; closing asks before discarding them.
+Disconnection retains drafts for the same player.
 
 Matching playlist copies appear once. If their songs/order differ, choose
 **Use Internal Version** or **Use SD Version** before editing. New/edited ordinary
@@ -68,7 +66,8 @@ The Rockbox path buffer permits at most 259 UTF-8 bytes, including volume prefix
 After success, safely eject through Windows and disconnect. Open the playlist
 on the player and check its order and hearts. Playlist edits do not
 require rebuilding the music database. Managed podcast audio is downloaded,
-tagged, transferred and retired by Podcasts; music audio and scores are read-only.
+tagged, transferred and retired by Podcasts. The only music audio Manager writes or
+deletes is under `MusicLibrary/Discovery/`; scores are read-only.
 Firmware installation is a separate release step. Eject through Windows.
 
 ## Weekly podcasts and Clip+ controls
@@ -144,11 +143,9 @@ The build script bundles the tools by default; developers can use
 
 ## Listening scores and discovery
 
-Connect the player, then select **Discover** in the sidebar. Manager automatically
-reads `.rockbox/home-scores.tsv` from internal storage when loading the library.
-The **Score** column in music and playlist views shows current points and supports
-sorting. **Reload scores** refreshes listening data without discarding your drafts.
-The top-level Refresh action also reloads scores with the library.
+Manager reads `.rockbox/home-scores.tsv` from internal storage when loading the
+library. The **Score** column in music and playlist views shows current points and
+supports sorting.
 
 These are the player's Home genre-autoplay listening scores: a completed play
 earns two points; an exit at or beyond halfway earns one. Points halve every
@@ -156,49 +153,43 @@ earns two points; an exit at or beyond halfway earns one. Points halve every
 player timestamps retain the stored balance; future timestamps never increase
 it. Set the player's clock correctly for meaningful decay.
 
-Discover shows your top five genres and their points across listened songs.
-It ranks genres using total current points divided by the number of listened
-songs plus two. This balances average enjoyment with evidence from more than
-one song; songs with only early skips count toward the denominator. Unplayed
-songs do not count. The first genre tag on a song supplies its genre group.
-The library reader preserves compound parents such as `Hip-Hop/Rap` and
-`R&B/Soul` when an ID3 reader splits their slash into separate values.
+Each Update installs up to two **pop** songs (Katy Perry-style mainstream pop) and
+two **rap** songs as stereo 192-kbps MP3s in `MusicLibrary/Discovery/` on the SD
+card, tagged with title, artist, album `Discovery` and genre `Pop` or `Hip-Hop/Rap`.
+MusicBrainz supplies the picks: for each group, searches alternate between your two
+highest-scoring artists in that group and the catalog tags `dance-pop`/`pop` or
+`hip hop`/`trap`. Pop means library genres such as `Pop`, `Pop-Dance` and
+`Dance-pop`, excluding indie, rock, alternative, folk and R&B blends; rap is any
+hip-hop, rap or trap genre. Live, remix, edit, sped-up and similar versions are
+skipped, as are songs already in the library, and each pick has a different artist.
+yt-dlp downloads the first YouTube search result for "artist - title official audio"
+(under 15 minutes). A failed download is skipped and may be offered again next time.
+`%LOCALAPPDATA%\RockboxManager\discovery-history.json` remembers every installed
+pick so a retired song is never suggested again.
 
-Choose **Find suggestions** to request up to four picks: an album and a song
-for each of your top two genres. MusicBrainz supplies real catalog entries.
-Searches try the subgenre in your `Genre-Subgenre` tags, then the parent genre,
-then your highest-scoring artist in that genre if needed. Labels such as
-`Pop-Dance` become dance-pop, `Rock-Alternative` becomes alternative rock, and
-`Hip-Hop/Rap-Trap` tries trap before hip hop. Each card explains the match,
-links to its catalog page and has **Copy details** for later searching.
-Existing albums and songs are excluded using their artist/title tags, plus
-MusicBrainz release-group IDs when present. Different artist credits or unusual
-tags can prevent duplicate detection. The comparison covers the connected
-player's library, including its connected SD card.
+New songs are appended to the **Discovery** playlist, which accumulates across
+updates and can be edited like any other playlist. A Discovery song is deleted (with
+its generated cover) only when all of these hold: it has been played (any score
+row with listening), it is not liked, and its current score is below **1** point.
+Unplayed songs keep their place until you hear them. Deleted songs are removed from
+every ordinary playlist. Music outside `MusicLibrary/Discovery/` is never deleted.
+New songs appear in Home genre autoplay only after Rockbox's database includes them.
 
-Catalog queries send genre and artist names to MusicBrainz when you choose
-Find suggestions; the score file, paths, and listening counts stay local.
-Artwork and discovery share MusicBrainz's one-request-per-second budget.
-**Cancel search** stops a lookup. Catalog failures show a retry message and keep
-previous suggestions visible when no replacements are available. There is no
-account or API key to configure. Suggestions are held until the library or scores
-are reloaded; follow the catalog link to review a pick before acquiring music
-through your normal process. Manager does not download or import suggested audio.
+Catalog queries send artist names and genre tags to MusicBrainz; the score file,
+paths and listening counts stay local. Artwork and discovery share MusicBrainz's
+one-request-per-second budget. The score reader uses the last complete valid
+snapshot per exact, case-sensitive path, decodes escaped path characters once,
+ignores an interrupted final row, and never edits the score file.
 
-If there are no positive scores matched to songs with genre tags, Discover explains
-how to get started. Scores for missing songs or a disconnected SD card are excluded.
-The reader uses the last complete valid snapshot per exact, case-sensitive path,
-decodes escaped path characters once, and ignores an interrupted final row.
-It never edits the score file.
-
-For a JSON report without opening the main window:
+For a read-only JSON preview of what Update would delete and suggest:
 
 ```powershell
 Start-Process C:\RockboxDev\rockbox\build-rockbox-manager\RockboxManager.exe -WindowStyle Hidden -Wait -ArgumentList '--suggest C:\RockboxDev\logs\suggestions.json'
 ```
 
-This requires exactly one detected player, reads its music and scores, queries the
-catalog, and writes only the requested PC report. It also accepts `--fixture`.
+This requires exactly one detected player, reads its music, likes and scores,
+queries the catalog, and writes only the requested PC report; nothing is
+downloaded or written to the player. It also accepts `--fixture`.
 
 ## Album artwork
 
@@ -287,13 +278,13 @@ and verifies its contents after replacement. Writes are per-file; a complete
 multi-volume send is not atomic. Rename destinations precede
 removal of the old names. The interface reports verified progress if a send fails.
 
-**Retry Send** continues the saved operation, including after restarting the app.
-Connect the original player/card. Edits remain locked until retry succeeds or
-**Reload player** is selected. Reload abandons retry and reads the actual current
-files; already applied changes remain. If another program/player changed an
+**Update** continues the saved operation, including after restarting the app.
+Connect the original player/card. Edits remain locked until it succeeds; if the
+retry fails too, Update abandons it and reads the actual current files; already
+applied changes remain. If another program/player changed an
 affected file, reload and resolve the current versions instead of overwriting it.
 
-The **Backups** button opens `%LOCALAPPDATA%\RockboxManager\Backups`. Each operation
+Backups are kept in `%LOCALAPPDATA%\RockboxManager\Backups`. Each operation
 has `operation.json` (or `abandoned-operation.json`) and numbered `.original`
 files. The manifest maps each numbered file to storage and relative pathname,
 records its original hash, and records whether a destination originally existed.
@@ -331,11 +322,11 @@ temporary folders and injected storage faults, never mounted hardware.
 
 Manual acceptance: automatic cover preparation and selected-song preview;
 Artists/Albums and exact genre filtering; connection gate; search and storage filters; create/add/remove/
-reorder/rename/delete; likes; Discard; unsent-close prompt;
-disconnect/reconnect; mirrored-copy conflict choices; Send and on-player playback.
-Discovery acceptance: score sorting; top genres; Reload scores with an unsent draft;
-Find suggestions, reasons and catalog links; Copy details; cancel/offline states;
-no scored songs; and exclusion of existing albums/songs.
+reorder/rename/delete; likes; unsent-close prompt;
+disconnect/reconnect; mirrored-copy conflict choices; Update and on-player playback.
+Update acceptance: locked window and progress; close blocked while running; offline
+catalog and missing tools reported after it finishes; Discovery playlist growth;
+retirement of a played, unliked, low-scoring Discovery song only.
 
 The player now displays all catalog playlists on Home automatically. There is
 no pin limit or Home-order editor. Legacy pin files are left untouched. Persisted

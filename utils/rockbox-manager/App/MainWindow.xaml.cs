@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -8,7 +7,6 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Navigation;
 using System.Windows.Threading;
 using RockboxManager.Core;
 
@@ -22,21 +20,15 @@ public partial class MainWindow : Window
     private EditSession? session;
     private PlayerDevice? connected;
     private List<Track> library = [];
-    private ListeningProfile listening = ListeningProfile.Empty("Connect your player to read listening scores.");
-    private List<MusicSuggestion> suggestions = [];
-    private string discoveryStatus = "Select Find suggestions to explore new music.";
-    private CancellationTokenSource? discoveryCancellation;
+    private ListeningProfile listening = ListeningProfile.Empty;
     private Dictionary<SongPath, ArtworkResult> artwork = [];
     private CancellationTokenSource? artworkCancellation;
     private readonly PodcastManager podcastManager;
-    private CancellationTokenSource? podcastCancellation;
-    private bool podcastBusy, showingPodcasts;
-    private PodcastWeek? requestedPodcastWeek;
     private bool preparingArtwork;
     private Dictionary<SongPath, Track> trackIndex = [];
     private ICollectionView? rows;
     private string currentKey = "library";
-    private bool busy, polling, navigating, sending, closed;
+    private bool busy, polling, navigating, updating, closed;
     private Point dragStart;
     private int[] dragIndexes = [];
     private PlaylistDraft? CurrentPlaylist => currentKey.StartsWith("playlist:") && Guid.TryParse(currentKey[9..], out var id)
@@ -58,14 +50,13 @@ public partial class MainWindow : Window
             var dark = 1;
             _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, sizeof(int));
         };
-        Loaded += async (_, _) => { timer.Start(); await Poll(); await PreparePodcastsAsync(transferIfConnected: true); };
+        Loaded += async (_, _) => { timer.Start(); await Poll(); };
         timer.Tick += async (_, _) => await Poll();
-        RefreshPodcastUi();
     }
 
     private async Task Poll()
     {
-        if (polling || busy || closed) return;
+        if (polling || busy || updating || closed) return;
         polling = true;
         try
         {
@@ -91,28 +82,17 @@ public partial class MainWindow : Window
                 connected = found;
                 if (changed)
                 {
-                    discoveryCancellation?.Cancel();
                     if (found is not null && !session.IsDirty && session.PendingBatch is null) await LoadDevice(found);
-                    else
-                    {
-                        StatusText.Text = found is null ? "Player disconnected. Your draft is retained; reconnect the same player to send it." :
-                            found.Sd is null ? "Internal storage connected. Reconnect the original SD card to send mirrored playlist edits." :
-                            "Player reconnected. Your pending changes are ready to send.";
-                        UpdateChrome();
-                        if (found is not null) _ = PreparePodcastsAsync(transferIfConnected: true);
-                    }
+                    else UpdateChrome();
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Management.ManagementException)
         {
-            StatusText.Text = "Could not read the player: " + ex.Message;
             connected = null;
             UpdateChrome();
         }
         finally { polling = false; }
-        if (requestedPodcastWeek != podcastManager.CurrentWeek)
-            _ = PreparePodcastsAsync(transferIfConnected: connected is not null);
     }
 
     private static string ConnectionKey(PlayerDevice? device) => device is null ? "" :
@@ -121,14 +101,13 @@ public partial class MainWindow : Window
     private async Task LoadDevice(PlayerDevice device, bool findRecovery = true)
     {
         artworkCancellation?.Cancel();
-        discoveryCancellation?.Cancel();
         busy = true; UpdateChrome();
         ConnectionPanel.Visibility = Visibility.Visible;
         ConnectionTitle.Text = "Reading your player";
         ConnectionText.Text = "Loading playlists and music tags…";
         ScanProgress.Visibility = Visibility.Visible;
         DevicePicker.Visibility = Visibility.Collapsed;
-        var progress = new Progress<string>(text => { ConnectionText.Text = text; StatusText.Text = text; });
+        var progress = new Progress<string>(text => ConnectionText.Text = text);
         try
         {
             var loaded = await Task.Run(() => (Session: EditSession.Load(device),
@@ -136,8 +115,6 @@ public partial class MainWindow : Window
             if (closed) return;
             session = loaded.Session; library = loaded.Tracks;
             listening = await Task.Run(() => ListeningProfile.Load(device, library), cancellation.Token);
-            suggestions = []; discoveryStatus = "Select Find suggestions to explore new music.";
-            UpdateDiscovery();
             artwork = [];
             GenreFilter.ItemsSource = new[] { "All genres" }.Concat(library.Select(t => t.Genre).Where(g => g.Length > 0)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.CurrentCultureIgnoreCase)).ToList();
@@ -160,21 +137,16 @@ public partial class MainWindow : Window
             ConnectionPanel.Visibility = Visibility.Collapsed;
             Editor.Visibility = Visibility.Visible;
             RefreshNavigation();
-            StatusText.Text = session.PendingBatch is null
-                ? "Changes stay on this PC until you send them. Removing a playlist entry keeps the audio file."
-                : "An interrupted send was found. Retry Send to finish it, or Reload player to inspect the current files. Backups are retained.";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             ConnectionTitle.Text = "Could not read the library";
-            ConnectionText.Text = ex.Message + " Reconnect the player and click Refresh.";
+            ConnectionText.Text = ex.Message;
             ScanProgress.Visibility = Visibility.Collapsed;
-            StatusText.Text = ex.Message;
         }
         finally { busy = false; if (!closed) UpdateChrome(); }
-        if (!closed && session?.PendingBatch is null && connected is not null) _ = PrepareArtwork();
-        if (!closed && connected is not null) _ = PreparePodcastsAsync(transferIfConnected: true);
+        if (!closed && !updating && session?.PendingBatch is null && connected is not null) _ = PrepareArtwork();
     }
 
     private void RefreshNavigation(string? selectKey = null)
@@ -184,7 +156,6 @@ public partial class MainWindow : Window
         navigating = true;
         var nav = new List<NavItem> { new("library", "♫  All music", $"{library.Count:N0} songs · combined library"),
             new("artists", "Artists", "Browse by album artist"), new("albums", "Albums", "Browse in disc / track order"),
-            new("discover", "Discover", "New music from your listening scores"),
             new("liked", "♥  " + session.Liked.Label, $"{session.Liked.Entries.Count:N0} liked songs") };
         nav.AddRange(session.VisiblePlaylists.Where(p => !p.IsLiked).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => new NavItem("playlist:" + p.Id, p.Label, $"{p.Entries.Count:N0} songs · {p.CopyLabel}")));
@@ -202,7 +173,6 @@ public partial class MainWindow : Window
     private void NavigationChanged(object sender, SelectionChangedEventArgs e)
     {
         if (navigating || Navigation.SelectedItem is not NavItem nav) return;
-        showingPodcasts = false; PodcastPanel.Visibility = Visibility.Collapsed;
         currentKey = nav.Key;
         SearchBox.Text = ""; StorageFilter.SelectedIndex = 0;
         GenreFilter.SelectedIndex = 0;
@@ -229,11 +199,7 @@ public partial class MainWindow : Window
     private void ShowView()
     {
         if (session is null) return;
-        if (showingPodcasts) return;
-        var discover = currentKey == "discover";
-        DiscoveryPanel.Visibility = discover ? Visibility.Visible : Visibility.Collapsed;
-        Editor.Visibility = discover ? Visibility.Collapsed : Visibility.Visible;
-        if (discover) { UpdateDiscovery(); UpdateChrome(); return; }
+        Editor.Visibility = Visibility.Visible;
         var playlist = CurrentPlaylist;
         ViewTitle.Text = playlist?.Name ?? (currentKey == "artists" ? "Artists" : currentKey == "albums" ? "Albums" : "All music");
         ViewCaption.Text = playlist is null ? "Search every song on your player. Select songs to build a playlist or update your likes." :
@@ -260,93 +226,12 @@ public partial class MainWindow : Window
         UpdateChrome();
     }
 
-    private void PodcastsClick(object sender, RoutedEventArgs e)
-    {
-        showingPodcasts = !showingPodcasts;
-        if (showingPodcasts)
-        {
-            Editor.Visibility = DiscoveryPanel.Visibility = ConnectionPanel.Visibility = Visibility.Collapsed;
-            PodcastPanel.Visibility = Visibility.Visible;
-            RefreshPodcastUi();
-        }
-        else if (session is not null)
-        {
-            PodcastPanel.Visibility = Visibility.Collapsed;
-            ShowView();
-        }
-        else
-        {
-            PodcastPanel.Visibility = Visibility.Collapsed;
-            ConnectionPanel.Visibility = Visibility.Visible;
-        }
-    }
     private bool RowMatches(object obj)
     {
         var track = ((TrackRow)obj).Track;
         if (StorageFilter.SelectedIndex == 1 && track.Path.Storage != Storage.Internal ||
             StorageFilter.SelectedIndex == 2 && track.Path.Storage != Storage.Sd) return false;
         return LibraryViews.Matches(track, SearchBox.Text, GenreFilter.SelectedIndex > 0 ? GenreFilter.SelectedItem as string : null);
-    }
-    private void UpdateDiscovery()
-    {
-        ScoreSummary.Text = listening.Status;
-        GenreScores.ItemsSource = listening.Genres.Take(5).ToList();
-        Suggestions.ItemsSource = suggestions;
-        DiscoveryStatus.Text = listening.Genres.Count == 0
-            ? "Suggestions need scored songs with genre tags. Play music through Home genre autoplay, then reload scores."
-            : discoveryStatus;
-    }
-    private async void ReloadScoresClick(object sender, RoutedEventArgs e)
-    {
-        if (busy || connected is null || discoveryCancellation is not null) return;
-        busy = true; UpdateChrome();
-        try
-        {
-            listening = await Task.Run(() => ListeningProfile.Load(connected, library), cancellation.Token);
-            suggestions = []; discoveryStatus = "Scores reloaded. Select Find suggestions for fresh picks.";
-            if (closed) return;
-            ShowView();
-        }
-        catch (OperationCanceledException) { }
-        finally { busy = false; if (!closed) UpdateChrome(); }
-    }
-    private async void FindSuggestionsClick(object sender, RoutedEventArgs e)
-    {
-        if (discoveryCancellation is not null) { discoveryCancellation.Cancel(); return; }
-        if (busy || listening.Genres.Count == 0 || session is null) return;
-        var editing = session;
-        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
-        discoveryCancellation = operation; UpdateChrome();
-        var progress = new Progress<string>(text =>
-        { if (session == editing && !operation.IsCancellationRequested) { discoveryStatus = text; DiscoveryStatus.Text = text; } });
-        try
-        {
-            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            var result = await new DiscoveryService(http).Find(listening.Genres, library, progress, operation.Token);
-            if (session != editing || operation.IsCancellationRequested) return;
-            var retained = result.Suggestions.Count == 0 && suggestions.Count > 0;
-            if (!retained) suggestions = result.Suggestions;
-            discoveryStatus = (retained ? "Previous suggestions kept. " : "") + result.Status;
-        }
-        catch (OperationCanceledException) { if (session == editing) discoveryStatus = "Search canceled. Select Find suggestions to try again."; }
-        finally
-        {
-            if (discoveryCancellation == operation)
-            { discoveryCancellation = null; if (!closed) { UpdateDiscovery(); UpdateChrome(); } }
-        }
-    }
-    private void SuggestionNavigate(object sender, RequestNavigateEventArgs e)
-    {
-        if (e.Uri.Scheme == "https" && e.Uri.Host == "musicbrainz.org")
-            try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
-            catch (Win32Exception ex) { ShowError("Could not open your browser: " + ex.Message); }
-        e.Handled = true;
-    }
-    private void CopySuggestionClick(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not MusicSuggestion suggestion) return;
-        try { Clipboard.SetText($"{suggestion.Artist} — {suggestion.Title} ({suggestion.Kind})\n{suggestion.Url}"); }
-        catch (ExternalException) { ShowError("The clipboard is busy. Try copying again."); }
     }
     private void FilterChanged(object sender, RoutedEventArgs e)
     {
@@ -407,103 +292,6 @@ public partial class MainWindow : Window
     }
     private async void ArtworkRetryClick(object sender, RoutedEventArgs e) { if (!busy && !preparingArtwork) await PrepareArtwork(retry: true); }
 
-    private void RefreshPodcastUi()
-    {
-        if (PodcastSubscriptions is null) return;
-        PodcastSubscriptions.ItemsSource = podcastManager.Subscriptions.Subscriptions.ToList();
-        var prepared = podcastManager.Prepared;
-        PodcastWeekLabel.Text = $"Latest completed America/New_York week: {podcastManager.CurrentWeek.Label}";
-        PodcastCount.Text = prepared?.Catalog is { } catalog
-            ? $"{catalog.Episodes.Count:N0} episode{(catalog.Episodes.Count == 1 ? "" : "s")}"
-            : "No prepared drop";
-        PodcastEpisodes.ItemsSource = prepared?.Catalog?.Episodes.Select(e => new PodcastRow(e)).ToList() ?? [];
-        if (prepared is not null && !podcastBusy) PodcastStatus.Text = prepared.Status;
-        PodcastCancel.IsEnabled = podcastBusy;
-        PodcastRetry.IsEnabled = !podcastBusy;
-    }
-
-    private async Task PreparePodcastsAsync(bool transferIfConnected)
-    {
-        if (podcastBusy || closed) return;
-        podcastBusy = true;
-        requestedPodcastWeek = podcastManager.CurrentWeek;
-        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
-        podcastCancellation = operation;
-        PodcastRetry.IsEnabled = false; PodcastCancel.IsEnabled = true;
-        var progress = new Progress<PodcastProgress>(value =>
-        {
-            PodcastStatus.Text = value.Message;
-            PodcastProgress.IsIndeterminate = value.Indeterminate || value.Total == 0;
-            PodcastProgress.Maximum = Math.Max(1, value.Total);
-            PodcastProgress.Value = Math.Min(value.Completed, PodcastProgress.Maximum);
-        });
-        try
-        {
-            var result = await Task.Run(() => podcastManager.PrepareAsync(operation.Token, progress), operation.Token);
-            if (result.Success && transferIfConnected && connected is not null)
-                await PublishPodcastsAsync(connected, operation.Token, progress);
-            else if (!result.Success)
-            {
-                var podcastRoot = Path.Combine(App.DataRoot, "Podcasts");
-                if (transferIfConnected && connected is not null && PodcastTransferService.HasPendingTransfer(podcastRoot))
-                    await PublishPodcastsAsync(connected, operation.Token, progress);
-                else PodcastStatus.Text = result.Status;
-            }
-        }
-        catch (OperationCanceledException) { PodcastStatus.Text = "Podcast preparation canceled. Retry when ready."; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PodcastSourceException)
-        { PodcastStatus.Text = "Podcast preparation failed: " + ex.Message; }
-        finally
-        {
-            if (podcastCancellation == operation) podcastCancellation = null;
-            var status = PodcastStatus.Text;
-            podcastBusy = false; RefreshPodcastUi(); PodcastStatus.Text = status; UpdateChrome();
-        }
-    }
-
-    private async Task PublishPodcastsAsync(PlayerDevice device, CancellationToken cancellation, IProgress<PodcastProgress> progress)
-    {
-        PodcastStatus.Text = "Sending prepared podcasts…";
-        var result = await Task.Run(() => podcastManager.PublishIfDueAsync(device, cancellation, progress), cancellation);
-        PodcastStatus.Text = result.Message;
-        if (!result.Success) ShowError(result.Message);
-    }
-
-    private async void PodcastPrepareClick(object sender, RoutedEventArgs e) => await PreparePodcastsAsync(transferIfConnected: true);
-
-    private async void PodcastAddClick(object sender, RoutedEventArgs e)
-    {
-        if (podcastBusy) return;
-        podcastBusy = true; PodcastCancel.IsEnabled = true;
-        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
-        podcastCancellation = operation;
-        var added = false;
-        try
-        {
-            PodcastStatus.Text = "Checking public channel…";
-            await podcastManager.AddAsync(PodcastUrl.Text, operation.Token, new Progress<PodcastProgress>(p => PodcastStatus.Text = p.Message));
-            added = true; PodcastUrl.Text = ""; RefreshPodcastUi();
-        }
-        catch (OperationCanceledException) { PodcastStatus.Text = "Adding channel canceled."; }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or PodcastSourceException)
-        { PodcastStatus.Text = "Could not add channel: " + ex.Message; }
-        finally
-        {
-            podcastCancellation = null; podcastBusy = false; RefreshPodcastUi();
-        }
-        if (added) await PreparePodcastsAsync(transferIfConnected: true);
-    }
-
-    private async void PodcastRemoveClick(object sender, RoutedEventArgs e)
-    {
-        if (podcastBusy || (sender as FrameworkElement)?.DataContext is not PodcastSubscription subscription) return;
-        podcastManager.Remove(subscription.ChannelId); RefreshPodcastUi();
-        await PreparePodcastsAsync(transferIfConnected: true);
-    }
-
-    private void PodcastCancelClick(object sender, RoutedEventArgs e) => podcastCancellation?.Cancel();
-    private async void PodcastRetryClick(object sender, RoutedEventArgs e) => await PreparePodcastsAsync(transferIfConnected: true);
-
     private void UpdateRowCount()
     {
         if (rows is null) return;
@@ -512,39 +300,24 @@ public partial class MainWindow : Window
     }
     private void UpdateChrome()
     {
-        if (SendButton is null) return;
+        if (UpdateButton is null) return;
         if (connected is not null)
         {
             DeviceTitle.Text = connected.Name;
             static string Space(PlayerVolume v) => v.FreeBytes == long.MaxValue ? "test folders" : $"{v.FreeBytes / 1073741824d:0.0} GB free";
             DeviceDetails.Text = $"Internal {Space(connected.Internal)}  ·  " + (connected.Sd is null ? "SD disconnected" : $"SD {Space(connected.Sd)}");
         }
-        else if (session is not null) { DeviceTitle.Text = "Player disconnected"; DeviceDetails.Text = "Reconnect the same Clip+ to send changes"; }
+        else if (session is not null) { DeviceTitle.Text = "Player disconnected"; DeviceDetails.Text = "Reconnect the same Clip+"; }
         NewButton.IsEnabled = CanEdit;
-        FindSuggestionsButton.Content = discoveryCancellation is null ? "Find suggestions" : "Cancel search";
-        FindSuggestionsButton.IsEnabled = discoveryCancellation is not null || !busy && session is not null && listening.Genres.Count > 0;
-        ReloadScoresButton.IsEnabled = !busy && connected is not null && discoveryCancellation is null;
         PlaylistActions.IsEnabled = SongActions.IsEnabled = ConflictBanner.IsEnabled = CanEdit;
         if (CurrentPlaylist is { } playlist)
         {
             RemoveButton.IsEnabled = !playlist.HasConflict && Songs.SelectedItems.Count > 0;
             UpButton.IsEnabled = DownButton.IsEnabled = !playlist.HasConflict && NaturalOrder && Songs.SelectedItems.Count > 0;
         }
-        var batch = session?.PendingBatch;
-        var needsSd = batch?.RequiresSd ?? (session?.Playlists.Any(p => p.IsDirty && !p.IsLiked) == true ||
-            session?.ArtworkChanges.Any(c => c.Storage == Storage.Sd || c.ArtworkTrack?.Storage == Storage.Sd) == true);
         ArtworkRetry.IsEnabled = CanEdit && !preparingArtwork;
-        var sdId = batch?.SdId ?? session?.Device.Sd?.Id;
-        var storageReady = connected is not null && (!needsSd || connected.Sd is not null && connected.Sd.Id == sdId);
-        SendButton.IsEnabled = !busy && storageReady && (session?.IsDirty == true || batch is not null);
-        SendButton.Content = batch is null ? "Send to Player →" : "Retry Send →";
-        DiscardButton.Content = batch is null ? "Discard changes" : "Reload player";
-        DiscardButton.IsEnabled = !busy && (session?.IsDirty == true || batch is not null && connected is not null);
-        PendingTitle.Text = busy ? sending ? "Sending changes…" : "Reading library…" : batch is not null
-            ? $"Send pending · {batch.CompletedCount}/{batch.Changes.Count} files verified" : session?.IsDirty == true
-            ? $"{session.ChangedCount} pending change{(session.ChangedCount == 1 ? "" : "s")}" : "All changes sent";
-        if (!busy && session?.IsDirty == true && needsSd && !storageReady)
-            StatusText.Text = "Your draft is retained. Connect the original player and SD card to send both playlist copies.";
+        UpdateButton.IsEnabled = !busy && !updating && session is not null && connected?.Sd is not null &&
+            connected.Sd.Id == (session.PendingBatch?.SdId ?? session.Device.Sd?.Id);
     }
 
     private int[] SelectedIndexes() => Songs.SelectedItems.Cast<TrackRow>().Select(r => r.Index).Order().ToArray();
@@ -552,7 +325,7 @@ public partial class MainWindow : Window
     private void Edit(Action action, string? key = null)
     {
         if (!CanEdit) return;
-        try { action(); RefreshNavigation(key); StatusText.Text = "Draft updated. Click Send to Player when you're ready."; }
+        try { action(); RefreshNavigation(key); }
         catch (InvalidOperationException ex) { ShowError(ex.Message); }
     }
     private void NewClick(object sender, RoutedEventArgs e)
@@ -629,64 +402,88 @@ public partial class MainWindow : Window
         Reselect(selected); e.Handled = true;
     }
 
-    private async void RefreshClick(object sender, RoutedEventArgs e)
-    {
-        if (busy) return;
-        if (session?.IsDirty == true || session?.PendingBatch is not null) { await DiscardOrReload(); return; }
-        if (connected is not null) await LoadDevice(connected); else await Poll();
-    }
-    private async void DiscardClick(object sender, RoutedEventArgs e) => await DiscardOrReload();
-    private async Task DiscardOrReload()
-    {
-        if (session is null || busy) return;
-        if (session.PendingBatch is not null)
-        {
-            if (connected is null) return;
-            if (MessageBox.Show(this, "Reload current player files and stop retrying this send? Files already sent stay applied. The operation and original files remain in Backups for recovery.", "Reload player", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            // Mark an explicitly abandoned operation so it is not offered again at startup.
-            var manifest = Path.Combine(session.PendingBatch.BackupFolder, "operation.json");
-            if (File.Exists(manifest)) File.Move(manifest, Path.Combine(session.PendingBatch.BackupFolder, "abandoned-operation.json"), true);
-            await LoadDevice(connected, findRecovery: false);
-        }
-        else if (MessageBox.Show(this, "Discard all unsent playlist, like and artwork changes?", "Discard changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-        { artworkCancellation?.Cancel(); session.Discard(); RefreshNavigation(); StatusText.Text = "Unsent changes discarded."; }
-    }
     private async void DevicePicked(object sender, SelectionChangedEventArgs e)
     { if (!busy && session is null && DevicePicker.SelectedItem is PlayerDevice device) await LoadDevice(device); }
 
-    private async void SendClick(object sender, RoutedEventArgs e)
+    private async void UpdateClick(object sender, RoutedEventArgs e)
     {
-        if (session is null || !SendButton.IsEnabled) return;
-        artworkCancellation?.Cancel();
-        busy = sending = true; UpdateChrome();
+        if (updating || busy || session is null || connected is null) return;
+        updating = true; artworkCancellation?.Cancel();
+        UpdateProgress.Value = 0; UpdateOverlay.Visibility = Visibility.Visible; UpdateChrome();
+        var errors = new List<string>();
+        var device = connected;
+        var keepDraft = true;
+        void Stage(double start, double size, double value) => UpdateProgress.Value = start + size * Math.Clamp(value, 0, 1);
         try
         {
-            var detected = await Task.Run(() => discovery.Find().FirstOrDefault(d => d.Id == session.Device.Id));
-            if (detected is null) throw new IOException("Reconnect the original player before sending.");
-            connected = detected;
-            session.PendingBatch ??= SyncBatch.Build(session, App.BackupRoot);
-            var progress = new Progress<string>(text => StatusText.Text = text);
-            var result = await Task.Run(() => new SyncEngine().Execute(session.PendingBatch, () => discovery.Verify(detected), progress));
-            if (result.Success)
+            if (session.IsDirty || session.PendingBatch is not null)
             {
-                await LoadDevice(detected);
-                StatusText.Text = result.Message;
+                var recovered = session.PendingBatch is { Started: true };
+                var sent = await Send(session, device);
+                if (!sent.Success)
+                {
+                    errors.Add(sent.Message);
+                    // A send that already failed once is abandoned so the player can be reloaded; its backups remain.
+                    if (!recovered) return;
+                    var manifest = Path.Combine(session.PendingBatch!.BackupFolder, "operation.json");
+                    if (File.Exists(manifest)) File.Move(manifest, Path.Combine(session.PendingBatch.BackupFolder, "abandoned-operation.json"), true);
+                }
             }
-            else { StatusText.Text = result.Message; ShowError(result.Message); }
+            keepDraft = false;
+            Stage(0, .1, 1);
+            var podcast = new Progress<PodcastProgress>(p => { if (p.Total > 0) Stage(.1, .3, (double)p.Completed / p.Total); });
+            try
+            {
+                var prepared = await Task.Run(() => podcastManager.PrepareAsync(cancellation.Token, podcast));
+                if (!prepared.Success) errors.Add(prepared.Status);
+                var published = await Task.Run(() => podcastManager.PublishIfDueAsync(device, cancellation.Token, podcast));
+                if (!published.Success && prepared.Success) errors.Add(published.Message);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PodcastSourceException)
+            { errors.Add("Podcasts: " + ex.Message); }
+            Stage(0, .4, 1);
+            var tracks = await Task.Run(() => PlayerLibrary.Scan(device, null, cancellation.Token));
+            var liked = (await Task.Run(() => EditSession.Load(device))).Liked.Entries.ToHashSet();
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var music = new DiscoveryUpdate(new DiscoveryService(http), PortableToolPaths.BesideExecutable(),
+                Path.Combine(App.DataRoot, "discovery-history.json"));
+            var progress = new Progress<double>(v => Stage(.4, .5, v));
+            var changes = await Task.Run(() => music.RunAsync(device, tracks, liked, progress, cancellation.Token));
+            errors.AddRange(changes.Errors);
+            var fresh = await Task.Run(() => EditSession.Load(device));
+            DiscoveryUpdate.ApplyPlaylists(fresh, changes.Removed, changes.Added);
+            if (fresh.IsDirty) { var sent = await Send(fresh, device); if (!sent.Success) errors.Add(sent.Message); }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Management.ManagementException)
-        { StatusText.Text = ex.Message; ShowError(ex.Message); }
-        finally { busy = sending = false; UpdateChrome(); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or
+            System.Net.Http.HttpRequestException or Win32Exception or System.Management.ManagementException)
+        { errors.Add(ex.Message); }
+        finally
+        {
+            if (!closed)
+            {
+                if (!keepDraft && connected is not null) await LoadDevice(connected);
+                UpdateOverlay.Visibility = Visibility.Collapsed;
+            }
+            updating = false;
+            if (!closed)
+            {
+                UpdateChrome();
+                if (!keepDraft) _ = PrepareArtwork();
+                if (errors.Count > 0) ShowError(string.Join("\n\n", errors.Distinct()));
+            }
+        }
     }
-    private void BackupsClick(object sender, RoutedEventArgs e)
+    private async Task<SyncResult> Send(EditSession editing, PlayerDevice device)
     {
-        Directory.CreateDirectory(App.BackupRoot);
-        Process.Start(new ProcessStartInfo(App.BackupRoot) { UseShellExecute = true });
+        editing.PendingBatch ??= SyncBatch.Build(editing, App.BackupRoot);
+        var batch = editing.PendingBatch;
+        return await Task.Run(() => new SyncEngine().Execute(batch, () => discovery.Verify(device)));
     }
     private void ShowError(string text) => MessageBox.Show(this, text, "Rockbox Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (sending) { e.Cancel = true; ShowError("Wait for the current send to finish before closing."); return; }
+        if (updating) { e.Cancel = true; return; }
         if (session?.IsDirty == true || session?.PendingBatch is not null)
         {
             var text = session.PendingBatch is { Started: true }
@@ -695,17 +492,10 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, text, "Unsent changes", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             { e.Cancel = true; return; }
         }
-        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel(); discoveryCancellation?.Cancel(); podcastCancellation?.Cancel();
+        closed = true; timer.Stop(); cancellation.Cancel(); artworkCancellation?.Cancel();
     }
     private sealed record CatalogItem(string Key, string Label);
     private sealed record NavItem(string Key, string Label, string Caption);
-    private sealed record PodcastRow(PodcastEpisode Episode)
-    {
-        public string Title => Episode.Title;
-        public string ChannelName => Episode.ChannelName;
-        public string PublishedLabel => Episode.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm zzz");
-        public string DurationLabel => Episode.Duration == TimeSpan.Zero ? "—" : Episode.Duration.ToString(Episode.Duration.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
-    }
     private sealed record TrackRow(int Index, Track Track, bool Liked, double Points)
     {
         public int Number => Index + 1;

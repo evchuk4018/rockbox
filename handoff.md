@@ -1,5 +1,18 @@
 # Rockbox Manager and Clip+ handoff
 
+
+## Manager reduced to playlists plus Update — November 17, 2026
+
+The Podcasts and Discover panels, Refresh, Send, Discard and Backups buttons were
+removed. A single **Update** button locks the window behind a progress bar and, in
+order: sends playlist edits, prepares and transfers the latest podcast week,
+deletes played, unliked Discovery songs scoring below 1 point, downloads two pop
+and two rap picks (MusicBrainz + yt-dlp) into SD `MusicLibrary/Discovery/`, and
+appends them to the accumulating **Discovery** playlist. Logic is in
+`utils/rockbox-manager/Core/DiscoveryUpdate.cs`; see the Manager README. 92/92
+Manager tests pass. Not yet run against the real player, live MusicBrainz or
+YouTube; Home genre autoplay sees new songs only after a database update.
+
 ## Boot crash reported and player recovered — November 9, 2026
 
 After the firmware update and SD dirty-flag repair, the user reported a crash on

@@ -69,11 +69,24 @@ public static class PodcastToolArguments
     public static ProcessSpec FfmpegTranscode(PortableToolPaths tools, string source, string destination, PodcastEpisode episode)
     {
         var args = new List<string> { "-hide_banner", "-loglevel", "error", "-i", source, "-map_metadata", "-1",
-            "-vn", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", "128k", "-metadata", "title=" + episode.Title,
+            "-vn", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", "128k", "-compression_level", "7", "-metadata", "title=" + episode.Title,
             "-metadata", "artist=" + episode.ChannelName, "-metadata", "album=" + episode.ChannelName,
             "-metadata", "comment=RockboxManager-ChannelId:" + episode.ChannelId, "-y", destination };
         return new ProcessSpec(tools.Ffmpeg, args);
     }
+
+    public static ProcessSpec SongSearch(PortableToolPaths tools, string query, string output)
+    {
+        var args = Common(tools).ToList();
+        args.AddRange(["--no-playlist", "--match-filter", "duration < 900", "--format", "bestaudio/best",
+            "--output", output, "ytsearch1:" + query]);
+        return new ProcessSpec(tools.YtDlp, args);
+    }
+
+    public static ProcessSpec SongTranscode(PortableToolPaths tools, string source, string destination, MusicSuggestion song) =>
+        new(tools.Ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", source, "-map_metadata", "-1", "-vn", "-ac", "2",
+            "-codec:a", "libmp3lame", "-b:a", "192k", "-metadata", "title=" + song.Title, "-metadata", "artist=" + song.Artist,
+            "-metadata", "album=Discovery", "-metadata", "genre=" + song.Genre, "-y", destination]);
 
     public static ProcessSpec Probe(PortableToolPaths tools, string source) => new(tools.Ffprobe,
         ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", source]);

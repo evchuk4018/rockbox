@@ -68,13 +68,24 @@ public partial class App : Application
                 Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
                 var devices = await Task.Run(discovery.Find);
                 if (devices.Count != 1) throw new InvalidOperationException("Suggestions require exactly one identified Clip+.");
+                // Read-only preview of what Update would retire and look up; nothing is downloaded or written to the player.
                 var tracks = await Task.Run(() => PlayerLibrary.Scan(devices[0]));
-                var profile = ListeningProfile.Load(devices[0], tracks);
+                var scores = ListeningProfile.Parse(ListeningProfile.Read(devices[0]));
+                var liked = EditSession.Load(devices[0]).Liked.Entries.ToHashSet();
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-                var result = await new DiscoveryService(http).Find(profile.Genres, tracks);
-                File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Created = DateTimeOffset.Now,
-                    Tracks = tracks.Count, profile.Status, Genres = profile.Genres, result.Suggestions,
-                    CatalogStatus = result.Status }, new JsonSerializerOptions { WriteIndented = true }));
+                var service = new DiscoveryService(http);
+                var seen = new HashSet<string>();
+                var groups = new List<object>();
+                foreach (var group in DiscoveryUpdate.Groups)
+                {
+                    var artists = DiscoveryUpdate.FavoriteArtists(tracks, scores, group.Genre, now);
+                    groups.Add(new { group.Genre, FavoriteArtists = artists,
+                        Songs = await service.Songs(group.Genre, group.Terms, artists, DiscoveryUpdate.PerGroup, tracks, seen) });
+                }
+                File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Created = DateTimeOffset.Now, Tracks = tracks.Count,
+                    WouldDelete = DiscoveryUpdate.Prune(tracks, scores, liked, now), Groups = groups },
+                    new JsonSerializerOptions { WriteIndented = true }));
                 Shutdown(0);
             }
             catch (Exception ex) { File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Error = ex.Message })); Shutdown(1); }
