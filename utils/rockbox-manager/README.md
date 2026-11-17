@@ -6,6 +6,12 @@ repository. The executable contains its .NET runtime and runs without admin righ
 ## Run and use
 
 Open `C:\RockboxDev\rockbox\build-rockbox-manager\RockboxManager.exe`.
+
+The local build is unsigned. Windows 11 Smart App Control may block it and
+offers no per-app exception. A build signed with a Windows-trusted code-signing
+certificate can run with Smart App Control enabled. See the
+[Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions).
+
 Connect the Clip+ over USB with its SD card installed. Detection uses Rockbox's
 identification files, USB device association, and volume serials, not drive letters
 or volume labels. Multiple players require choosing one. Other Rockbox targets
