@@ -85,23 +85,28 @@ public sealed class PodcastManager
             var catalogChannels = channels.Concat(distinct.Select(e => new PodcastChannel(e.ChannelId, e.ChannelName)))
                 .GroupBy(c => c.Id, StringComparer.Ordinal).Select(g => g.First()).ToList();
             var catalog = new PodcastCatalog(week, catalogChannels, distinct);
-            var ready = new List<PodcastPreparedEpisode>();
-            for (var i = 0; i < distinct.Count; i++)
+            // Each LAME encode uses one core, so prepare several episodes at once.
+            var slots = new PodcastPreparedEpisode?[distinct.Count];
+            var done = 0;
+            progress?.Report(new($"Preparing 0 of {distinct.Count:N0} episodes…", 0, distinct.Count));
+            try
             {
-                cancellation.ThrowIfCancellationRequested();
-                try
-                {
-                    progress?.Report(new($"Preparing {distinct[i].Title}…", i, distinct.Count));
-                    ready.Add(await media.PrepareAsync(distinct[i], cancellation, progress));
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) when (ex is IOException or PodcastSourceException or UnauthorizedAccessException)
-                {
-                    var failed = new PodcastPreparationResult(false, true, catalog, ready,
-                        $"Could not prepare all podcast audio: {ex.Message}", ex.Message);
-                    prepared = failed; SavePrepared(failed); return failed;
-                }
+                await Parallel.ForEachAsync(Enumerable.Range(0, distinct.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 1, 4), CancellationToken = cancellation },
+                    async (i, token) =>
+                    {
+                        slots[i] = await media.PrepareAsync(distinct[i], token);
+                        var count = Interlocked.Increment(ref done);
+                        progress?.Report(new($"Prepared {count:N0} of {distinct.Count:N0} episodes…", count, distinct.Count));
+                    });
             }
+            catch (Exception ex) when (ex is IOException or PodcastSourceException or UnauthorizedAccessException)
+            {
+                var failed = new PodcastPreparationResult(false, true, catalog, slots.OfType<PodcastPreparedEpisode>().ToList(),
+                    $"Could not prepare all podcast audio: {ex.Message}", ex.Message);
+                prepared = failed; SavePrepared(failed); return failed;
+            }
+            var ready = slots.Select(s => s!).ToList();
             var resultReady = new PodcastPreparationResult(true, true, catalog, ready,
                 distinct.Count == 0 ? $"Checked {catalog.Week.Label}: empty drop is valid." : $"Prepared {ready.Count:N0} podcast episode{(ready.Count == 1 ? "" : "s")} for {catalog.Week.Label}.");
             prepared = resultReady; SavePrepared(resultReady);

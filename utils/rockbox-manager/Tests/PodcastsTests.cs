@@ -379,6 +379,21 @@ static class PodcastsTests
             check(manager.PrepareAsync().GetAwaiter().GetResult().Success && source.Calls == 6);
         });
 
+        test("Podcast episodes are prepared concurrently and keep catalog order", () =>
+        {
+            using var temp = new PodcastTemp();
+            var now = DateTimeOffset.Parse("2026-11-09T16:00:00Z");
+            var week = PodcastWeek.PreviousCompleted(now);
+            var episodes = Enumerable.Range(0, 6).Select(i => new PodcastEpisode($"video_{i}", "UC_feed", "Feed", $"Episode {i}",
+                new DateTimeOffset(week.Monday.ToDateTime(new TimeOnly(18, 0)), TimeSpan.Zero), TimeSpan.FromSeconds(10))).ToList();
+            var media = new ConcurrentPodcastMedia();
+            var manager = new PodcastManager(temp.Root, new FixedPodcastSource(episodes), media, now: () => now);
+            manager.Subscriptions.Add(new("UC_feed", "Feed", "https://youtube.com/@feed"));
+            var result = manager.PrepareAsync().GetAwaiter().GetResult();
+            check(result.Success && media.MaxActive > 1 &&
+                result.Prepared.Select(p => p.Episode.Id).SequenceEqual(episodes.Select(e => e.Id)));
+        });
+
         test("Podcast cancellation, low space, hash failures and forged cleanup preserve unrelated data", () =>
         {
             foreach (var mode in new[] { "cancel", "sd-space", "internal-space", "hash", "forged" })
@@ -519,6 +534,28 @@ static class PodcastsTests
         {
             Calls++;
             return Task.FromResult(new PodcastEnumerationResult(true, new(subscription.ChannelId, subscription.Name), []));
+        }
+    }
+
+    private sealed class FixedPodcastSource(IReadOnlyList<PodcastEpisode> episodes) : IPodcastVideoSource
+    {
+        public Task<PodcastEnumerationResult> EnumerateAsync(PodcastSubscription subscription, PodcastWeek week,
+            CancellationToken cancellation = default, IProgress<PodcastProgress>? progress = null) =>
+            Task.FromResult(new PodcastEnumerationResult(true, new(subscription.ChannelId, subscription.Name), episodes));
+    }
+
+    private sealed class ConcurrentPodcastMedia : IPodcastMediaPreparer
+    {
+        private int active;
+        public int MaxActive;
+        public async Task<PodcastPreparedEpisode> PrepareAsync(PodcastEpisode episode, CancellationToken cancellation = default,
+            IProgress<PodcastProgress>? progress = null)
+        {
+            var now = Interlocked.Increment(ref active);
+            lock (this) MaxActive = Math.Max(MaxActive, now);
+            await Task.Delay(50 - int.Parse(episode.Id[^1..]) * 5, cancellation);
+            Interlocked.Decrement(ref active);
+            return new(episode, episode.Id + ".mp3", "", 0);
         }
     }
 
