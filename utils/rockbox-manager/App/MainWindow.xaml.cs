@@ -413,7 +413,19 @@ public partial class MainWindow : Window
         var errors = new List<string>();
         var device = connected;
         var keepDraft = true;
-        void Stage(double start, double size, double value) => UpdateProgress.Value = start + size * Math.Clamp(value, 0, 1);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var ticker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        // Extrapolates from the average pace so far; hidden until there is enough progress to estimate.
+        void ShowTimeLeft()
+        {
+            var done = UpdateProgress.Value;
+            if (done < .02 || clock.Elapsed < TimeSpan.FromSeconds(3)) { UpdateTimeLeft.Text = ""; return; }
+            var left = TimeSpan.FromSeconds(Math.Ceiling(clock.Elapsed.TotalSeconds * (1 - done) / done));
+            UpdateTimeLeft.Text = left.ToString(left.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") + " left";
+        }
+        void Stage(double start, double size, double value) { UpdateProgress.Value = start + size * Math.Clamp(value, 0, 1); ShowTimeLeft(); }
+        UpdateTimeLeft.Text = "";
+        ticker.Tick += (_, _) => ShowTimeLeft(); ticker.Start();
         try
         {
             if (session.IsDirty || session.PendingBatch is not null)
@@ -462,9 +474,10 @@ public partial class MainWindow : Window
         {
             if (!closed)
             {
-                if (!keepDraft && connected is not null) await LoadDevice(connected);
+                if (!keepDraft && connected is not null) { Stage(0, .95, 1); await LoadDevice(connected); }
                 UpdateOverlay.Visibility = Visibility.Collapsed;
             }
+            ticker.Stop();
             updating = false;
             if (!closed)
             {

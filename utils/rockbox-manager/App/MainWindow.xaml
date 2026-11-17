@@ -75,7 +75,10 @@
       </Grid>
     </Grid>
     <Border x:Name="UpdateOverlay" Grid.RowSpan="2" Margin="-22" Background="#F2151B23" Visibility="Collapsed">
-      <ProgressBar x:Name="UpdateProgress" Width="420" Height="6" Minimum="0" Maximum="1" Foreground="{StaticResource Accent}" Background="#29333F" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <ProgressBar x:Name="UpdateProgress" Width="420" Height="6" Minimum="0" Maximum="1" Foreground="{StaticResource Accent}" Background="#29333F"/>
+        <TextBlock x:Name="UpdateTimeLeft" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+      </StackPanel>
     </Border>
   </Grid>
 </Window>
